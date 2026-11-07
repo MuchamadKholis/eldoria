@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Eldoria — Kingdoms at War</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@500;700;800;900&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="world" class="world"><canvas id="cv" aria-label="Kingdom map"></canvas></div>
+    <header id="hud" class="hud"></header>
+    <aside id="sidebar" class="sidebar"></aside>
+    <section id="panel" class="bpanel hidden" aria-live="polite"></section>
+    <div id="placebar" class="placebar hidden"></div>
+    <nav id="dock" class="dock" aria-label="Main actions"></nav>
+    <div id="alert" class="alert hidden" role="alert"></div>
+    <div id="wmap" class="wmap hidden">
+      <canvas id="wcv" aria-label="World map"></canvas>
+      <header id="whud" class="whud"></header>
+      <nav id="wbar" class="wbar"></nav>
+      <section id="wpanel" class="wpanel hidden"></section>
+    </div>
+    <div id="rhud" class="rhud hidden"></div>
+    <div id="bhud" class="bhud hidden"></div>
+    <section id="sheet" class="sheet hidden"></section>
+    <div id="modal" class="modal hidden"></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <div id="title" class="title hidden"></div>
+  </div>
+  <!-- Load order: data → core → game → render → ui → main -->
+  <script src="js/data/defs.js"></script>
+  <script src="js/data/content.js"></script>
+  <script src="js/data/codes.js"></script>
+  <script src="js/core/state.js"></script>
+  <script src="js/core/audio.js"></script>
+  <script src="js/game/battle.js"></script>
+  <script src="js/game/siege.js"></script>
+  <script src="js/core/world.js"></script>
+  <script src="js/render/art.js"></script>
+  <script src="js/render/view.js"></script>
+  <script src="js/render/worldview.js"></script>
+  <script src="js/ui/core.js"></script>
+  <script src="js/ui/home.js"></script>
+  <script src="js/ui/screens.js"></script>
+  <script src="js/ui/battleui.js"></script>
+  <script src="js/ui/world.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
