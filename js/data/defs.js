@@ -333,6 +333,30 @@ CH.GEM_SHOP = {
   fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
 };
 
+/* Skins: four themes for your castle and every hero. Cosmetic. */
+CH.SKINS = {
+  classic: { name: 'Classic', theme: 'Default', castle: 0, hero: 0 },
+  verdant: { name: 'Verdant Crown', theme: 'Dunia · Earthly', tint: 'rgba(80,170,60,0.38)', aura: '140,230,120', fx: 'leaf', wall: '#8f9a72', roof: '#3f8a3a', castle: 400, hero: 250 },
+  celestial: { name: 'Celestial Sanctum', theme: 'Surgawi · Heavenly', tint: 'rgba(255,246,215,0.55)', aura: '255,236,160', fx: 'light', wall: '#f4efe2', roof: '#e8c25a', castle: 900, hero: 500 },
+  infernal: { name: 'Infernal Bastion', theme: 'Neraka · Hellfire', tint: 'rgba(190,35,15,0.48)', aura: '255,90,30', fx: 'ember', wall: '#3a2624', roof: '#c2401f', castle: 900, hero: 500 },
+  abyssal: { name: 'Abyssal Throne', theme: 'Kegelapan · Darkness', tint: 'rgba(45,15,80,0.58)', aura: '170,90,255', fx: 'shadow', wall: '#2a2436', roof: '#6a3aa8', castle: 900, hero: 500 },
+};
+CH.SKIN_ORDER = Object.keys(CH.SKINS);
+CH.GEM_SHOP.marchSlot = n => 300 * Math.pow(2, n); // price of the (n+1)th extra march slot
+CH.MAX_MARCHES = 5;
+/* The Throne of Eldoria */
+CH.THRONE = {
+  name: 'Aurelion Citadel', title: 'King of Eldoria',
+  warDay: 6, warHour: 15, warMinutes: 30, // Saturday 15:00 local time, 30 minutes
+  rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
+  kingBonus: { prod: 0.1, atk: 0.05 },
+  prizes: [
+    { tier: 'royal', name: 'Royal Treasure', count: 1, reward: { gems: 1000, gold: 100000, food: 100000 }, items: { shield8h: 2, teleAdvanced: 1, speed1h: 5 } },
+    { tier: 'noble', name: 'Noble Chest', count: 3, reward: { gems: 300, gold: 50000, food: 50000 }, items: { speed1h: 2 } },
+    { tier: 'knight', name: 'Knight Chest', count: 6, reward: { gems: 100, gold: 20000, wood: 20000 }, items: { speed5m: 5 } },
+  ],
+};
+
 /* Academy technologies (on top of troop research). Max level = academy level. */
 CH.TECHS = {
   prosperity: { name: 'Prosperity', desc: '+5% production of all resources per level.', max: 8 },

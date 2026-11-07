@@ -20,6 +20,7 @@ CH.Home = (function () {
       '<button class="icon-btn mail-btn" id="hud-mail" aria-label="Reports">✉<b id="hud-unread"></b></button>' +
       '<button class="icon-btn" id="hud-settings" aria-label="Settings">' + UI.icon('gear') + '</button>';
     $('alert').onclick = () => { CH.Audio.play('click'); CH.WorldUI.incomingModal(); };
+    $('warbar').onclick = () => { CH.Audio.play('click'); const th = CH.App.save.world.throne; CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
     $('hud').onclick = e => {
       if (e.target.closest('#hud-player')) UI.sheet('profile');
       else if (e.target.closest('#hud-settings')) UI.sheet('settings');
@@ -58,7 +59,7 @@ CH.Home = (function () {
   }
   function moreMenu() {
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
+      [['ranks', 'crown', 'Leaderboards'], ['skins', 'shield', 'Skins'], ['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['redeem', 'gems', 'Redeem code'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
     { onClick: e => { const b = e.target.closest('[data-more]'); if (b) { UI.closeModal(); UI.sheet(b.dataset.more); } } });
@@ -83,6 +84,7 @@ CH.Home = (function () {
     }
     setText('hud-gems', U.fmt(s.res.gems)); setText('hud-runes', U.fmt(s.res.runes));
     setText('hud-unread', s.unread ? String(s.unread) : '');
+    CH.WorldUI.warBanner();
     // Incoming attack banner
     const inc = s.world ? CH.World.incoming(s) : [];
     const ab = $('alert');

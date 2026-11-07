@@ -20,11 +20,12 @@ CH.State = (function () {
       army: { swordsman: 300, archer: 200, lightCavalry: 100 }, train: [], trainJobs: {}, wounded: {}, healJob: null,
       research: { troops, spells, techs }, rjob: null, heroes, defenseHero: 'aldric',
       items: { shield8h: 1, teleRandom: 1, teleAdvanced: 1, speed5m: 5, speed1h: 1 },
+      skins: { castle: ['classic'], hero: {} }, equipped: { castle: 'classic', hero: {} }, extraMarch: 0,
       shieldUntil: 0, createdAt: now, faction: null, factionChangedAt: 0, helpUsedAt: 0, reports: [], unread: 0, world: null,
       campaign: {}, raid: { trophies: 0, seed: 1000 + Math.floor(Math.random() * 1e6), opponents: [], wins: 0, attacks: 0 },
       defense: { best: 0, runs: 0, claimed: [] },
       player: { name: 'Lord of Eldoria', xp: 0, level: 1 },
-      stats: { battlesWon: 0, enemiesSlain: 0, buildingsRaided: 0, obstaclesCleared: 0, attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, troopsLost: 0, resourcesLooted: 0, monstersSlain: 0, deserted: 0 },
+      stats: { battlesWon: 0, enemiesSlain: 0, buildingsRaided: 0, obstaclesCleared: 0, attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, troopsLost: 0, resourcesLooted: 0, monstersSlain: 0, deserted: 0, kills: 0 },
       settings: { music: 0.45, sfx: 0.7, muted: false, damageNumbers: true },
       redeemed: [],
       introSeen: false, lastSeen: now,
@@ -56,6 +57,7 @@ CH.State = (function () {
     let m = 1 + 0.05 * ((s.research.techs || {}).prosperity || 0);
     if (s.faction != null && CH.FACTIONS && CH.FACTIONS[s.faction].bonus.prod) m += CH.FACTIONS[s.faction].bonus.prod;
     if (CH.World && s.world) m += CH.World.territoryBonus(s);
+    if (CH.Throne && s.world && CH.Throne.isPlayerKing(s)) m += CH.THRONE.kingBonus.prod;
     return m;
   }
   function productionPerMin(s, r) {
@@ -354,7 +356,33 @@ CH.State = (function () {
     for (const t in s.research.techs) p += 150 * s.research.techs[t];
     return Math.round(p);
   }
-  const marchSlots = s => 1 + Math.floor((castleLevel(s) + 1) / 3);
+  const baseMarchSlots = s => 1 + Math.floor((castleLevel(s) + 1) / 3);
+  const marchSlots = s => Math.min(CH.MAX_MARCHES, baseMarchSlots(s) + (s.extraMarch || 0));
+  function buyMarchSlot(s) {
+    if (marchSlots(s) >= CH.MAX_MARCHES) return { ok: false, reason: 'You already have the maximum of ' + CH.MAX_MARCHES + ' marches' };
+    const p = CH.GEM_SHOP.marchSlot(s.extraMarch || 0);
+    if (s.res.gems < p) return { ok: false, reason: 'Not enough gems (' + p + ' needed)' };
+    s.res.gems -= p; s.extraMarch = (s.extraMarch || 0) + 1;
+    return { ok: true, price: p };
+  }
+  const ownsSkin = (s, kind, id, hero) => id === 'classic' || (kind === 'castle' ? s.skins.castle.includes(id) : (s.skins.hero[hero] || []).includes(id));
+  function buySkin(s, kind, id, hero) {
+    const sk = CH.SKINS[id];
+    if (!sk || (kind === 'hero' && !CH.HEROES[hero])) return { ok: false, reason: 'Unknown skin' };
+    if (ownsSkin(s, kind, id, hero)) return { ok: false, reason: 'Already owned' };
+    const p = sk[kind];
+    if (s.res.gems < p) return { ok: false, reason: 'Not enough gems (' + p + ' needed)' };
+    s.res.gems -= p;
+    if (kind === 'castle') s.skins.castle.push(id); else (s.skins.hero[hero] = s.skins.hero[hero] || []).push(id);
+    equipSkin(s, kind, id, hero);
+    return { ok: true, price: p };
+  }
+  function equipSkin(s, kind, id, hero) {
+    if (!ownsSkin(s, kind, id, hero)) return false;
+    if (kind === 'castle') s.equipped.castle = id; else s.equipped.hero[hero] = id;
+    return true;
+  }
+  const heroSkin = (s, id) => (s.equipped && s.equipped.hero[id]) || 'classic';
   function trade(s, from, to, amount) {
     const lvl = highestLevel(s, 'tradingPost');
     if (!lvl) return { ok: false, reason: 'Build a Trading Post' };
@@ -531,6 +559,7 @@ CH.State = (function () {
     if (rw.troops) for (const t in rw.troops) if (CH.TROOPS[t]) s.army[t] = (s.army[t] || 0) + Math.max(0, Math.floor(rw.troops[t]));
     if (rw.items) for (const i in rw.items) if (CH.ITEMS[i]) s.items[i] = (s.items[i] || 0) + Math.max(0, Math.floor(rw.items[i]));
     if (rw.heroes) for (const h of rw.heroes) if (s.heroes[h]) s.heroes[h].unlocked = true;
+    if (rw.skins) for (const k of rw.skins) { const [kind, id, hero] = String(k).split(':'); if (CH.SKINS[id] && !ownsSkin(s, kind, id, hero)) { if (kind === 'castle') s.skins.castle.push(id); else if (CH.HEROES[hero]) (s.skins.hero[hero] = s.skins.hero[hero] || []).push(id); } }
     const levels = rw.xp ? addXp(s, rw.xp) : [];
     s.redeemed.push(h);
     return { ok: true, entry, levels };
@@ -614,6 +643,11 @@ CH.State = (function () {
     d.createdAt = num(raw.createdAt, 0, Date.now(), Date.now());
     d.faction = Number.isInteger(raw.faction) && raw.faction >= 0 && raw.faction < 4 ? raw.faction : null;
     d.factionChangedAt = num(raw.factionChangedAt, 0, Date.now(), 0); d.helpUsedAt = num(raw.helpUsedAt, 0, Date.now(), 0);
+    if (raw.skins && Array.isArray(raw.skins.castle)) d.skins.castle = ['classic', ...raw.skins.castle.filter(x => CH.SKINS[x] && x !== 'classic')];
+    if (raw.skins && raw.skins.hero) for (const h of CH.HERO_ORDER) if (Array.isArray(raw.skins.hero[h])) d.skins.hero[h] = raw.skins.hero[h].filter(x => CH.SKINS[x]);
+    if (raw.equipped) { if (d.skins.castle.includes(raw.equipped.castle)) d.equipped.castle = raw.equipped.castle; for (const h of CH.HERO_ORDER) { const v = raw.equipped.hero && raw.equipped.hero[h]; if (v && (d.skins.hero[h] || []).includes(v)) d.equipped.hero[h] = v; } }
+    d.extraMarch = Math.floor(num(raw.extraMarch, 0, CH.MAX_MARCHES, 0));
+    d.stats.kills = Math.floor(num(raw.stats && raw.stats.kills, 0, 1e12, 0));
     d.reports = Array.isArray(raw.reports) ? raw.reports.filter(r => r && typeof r.t === 'number' && typeof r.kind === 'string').slice(0, 60) : [];
     d.unread = Math.floor(num(raw.unread, 0, 999, 0));
     d.world = CH.World ? CH.World.validate(raw.world) : null;
@@ -640,7 +674,7 @@ CH.State = (function () {
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
     collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
-    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy,
+    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy, baseMarchSlots, buyMarchSlot, ownsSkin, buySkin, equipSkin, heroSkin,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,
     tick, goals, unlocksAt, redeem,
   };

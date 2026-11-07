@@ -672,6 +672,7 @@
       const u = this.spawnUnit(CH.HEROES[id], this.playerSide, x, y, { mult: m, hero: id, heroLevel: lvl, ax: x, ay: y });
       u.abilityCd = 3;
       this.heroesUsed[id] = u;
+      u.skin = CH.State.heroSkin(this.save, id);
       this.deployedAny = true;
       this.emit('sfx', 'heroDeploy');
       return { ok: true, unit: u };
@@ -964,7 +965,7 @@
       this.stepDt = 1 / 30;
       this.timeLimit = cfg.timeLimit || 120;
       this.opponent = { cl: cfg.cl };
-      this.homeTerrain = !!cfg.homeTerrain;
+      this.homeTerrain = !!cfg.homeTerrain; this.castleSkin = cfg.castleSkin || null;
       this.dmgBy = { atk: 0, def: 0 };
       this.army = {}; this.heroesAvail = []; this.spells = {};
       const fm = cfg.fortMult || 1;
@@ -988,7 +989,7 @@
       });
       cfg.def.heroes.forEach((h, i) => {
         const u = this.spawnUnit(CH.HEROES[h.id], 'def', cx + (i ? -1 : 1) * 1.5 * T, cy + 1.6 * T, { mult: CH.State.heroMult(h.level) * 1.2, hero: h.id, heroLevel: h.level });
-        u.autoHero = true; u.abilityCd = 4; u.leash = 14 * T;
+        u.autoHero = true; u.abilityCd = 4; u.leash = 14 * T; u.skin = h.skin;
       });
       // Attackers deploy in waves from the side they marched in from.
       this.deployQ = this.formationPlan(cfg);
@@ -1035,7 +1036,7 @@
         const d = this.deployQ.shift();
         if (d.hero) {
           const u = this.spawnUnit(CH.HEROES[d.hero.id], 'atk', d.x, d.y, { mult: CH.State.heroMult(d.hero.level) * 1.2, hero: d.hero.id, heroLevel: d.hero.level });
-          u.autoHero = true; u.abilityCd = 3;
+          u.autoHero = true; u.abilityCd = 3; u.skin = d.hero.skin;
         } else this.squads.push(this.spawnSquad(CH.TROOPS[d.sq.type], 'atk', d.sq, d.x, d.y));
       }
     }

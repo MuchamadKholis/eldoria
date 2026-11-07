@@ -519,6 +519,24 @@ body.in-world .hud, body.in-world .sidebar, body.in-world .dock, body.in-world .
 .store-btns .btn { justify-content: space-between; flex-wrap: nowrap; }
 .store-btns .price { display: inline-flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.18); padding: 1px 8px; border-radius: 999px; }
 
+/* Throne war, leaderboards, skins */
+.warbar { position: absolute; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 92px); z-index: 7; padding: 6px 16px; border-radius: 999px; max-width: calc(100% - 16px); text-align: center;
+  background: linear-gradient(180deg, #ffe08a, #c9971f); color: #3a2204; border: 2px solid #fff4c8; font-weight: 900; cursor: pointer; box-shadow: 0 0 22px rgba(255, 200, 80, 0.6); }
+body.in-world .warbar { top: calc(env(safe-area-inset-top, 0px) + 100px); z-index: 10; }
+body.in-battle .warbar { display: none !important; }
+.ranks { display: flex; flex-direction: column; gap: 4px; }
+.rank-row { display: grid; grid-template-columns: 40px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.rank-row.me { background: rgba(95, 176, 255, 0.2); border: 1px solid rgba(95, 176, 255, 0.6); }
+.rank-row .rk { font-weight: 900; text-align: center; } .rank-row .rv { font-weight: 900; font-variant-numeric: tabular-nums; color: var(--gold-hi); }
+.skin-card { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.skin-prev { width: 200px; max-width: 100%; height: auto; border-radius: 12px; background: radial-gradient(circle at 50% 70%, #3f6a34, #1b2d18); }
+.skin-prev.hero { width: 96px; }
+.skin-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.skin-mini { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 104px; font-size: 0.78rem; text-align: center; }
+.skin-mini .btn { min-height: 34px; padding: 3px 10px; }
+.skin-hero h3 { margin-bottom: 6px; }
+@media (max-width: 760px) { .warbar { font-size: 0.78rem; top: calc(env(safe-area-inset-top, 0px) + 128px); } .rank-row { grid-template-columns: 30px 1fr auto; } .rank-row > .muted { display: none; } }
+
 </style>
 </head>
 <body>
@@ -530,6 +548,7 @@ body.in-world .hud, body.in-world .sidebar, body.in-world .dock, body.in-world .
     <div id="placebar" class="placebar hidden"></div>
     <nav id="dock" class="dock" aria-label="Main actions"></nav>
     <div id="alert" class="alert hidden" role="alert"></div>
+    <div id="warbar" class="warbar hidden" role="status"></div>
     <div id="wmap" class="wmap hidden">
       <canvas id="wcv" aria-label="World map"></canvas>
       <header id="whud" class="whud"></header>
@@ -878,6 +897,30 @@ CH.GEM_SHOP = {
   foodBonus: 1.5, // food packs contain 50% more
   items: { speed5m: 10, speed1h: 60, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
   fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
+};
+
+/* Skins: four themes for your castle and every hero. Cosmetic. */
+CH.SKINS = {
+  classic: { name: 'Classic', theme: 'Default', castle: 0, hero: 0 },
+  verdant: { name: 'Verdant Crown', theme: 'Dunia · Earthly', tint: 'rgba(80,170,60,0.38)', aura: '140,230,120', fx: 'leaf', wall: '#8f9a72', roof: '#3f8a3a', castle: 400, hero: 250 },
+  celestial: { name: 'Celestial Sanctum', theme: 'Surgawi · Heavenly', tint: 'rgba(255,246,215,0.55)', aura: '255,236,160', fx: 'light', wall: '#f4efe2', roof: '#e8c25a', castle: 900, hero: 500 },
+  infernal: { name: 'Infernal Bastion', theme: 'Neraka · Hellfire', tint: 'rgba(190,35,15,0.48)', aura: '255,90,30', fx: 'ember', wall: '#3a2624', roof: '#c2401f', castle: 900, hero: 500 },
+  abyssal: { name: 'Abyssal Throne', theme: 'Kegelapan · Darkness', tint: 'rgba(45,15,80,0.58)', aura: '170,90,255', fx: 'shadow', wall: '#2a2436', roof: '#6a3aa8', castle: 900, hero: 500 },
+};
+CH.SKIN_ORDER = Object.keys(CH.SKINS);
+CH.GEM_SHOP.marchSlot = n => 300 * Math.pow(2, n); // price of the (n+1)th extra march slot
+CH.MAX_MARCHES = 5;
+/* The Throne of Eldoria */
+CH.THRONE = {
+  name: 'Aurelion Citadel', title: 'King of Eldoria',
+  warDay: 6, warHour: 15, warMinutes: 30, // Saturday 15:00 local time, 30 minutes
+  rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
+  kingBonus: { prod: 0.1, atk: 0.05 },
+  prizes: [
+    { tier: 'royal', name: 'Royal Treasure', count: 1, reward: { gems: 1000, gold: 100000, food: 100000 }, items: { shield8h: 2, teleAdvanced: 1, speed1h: 5 } },
+    { tier: 'noble', name: 'Noble Chest', count: 3, reward: { gems: 300, gold: 50000, food: 50000 }, items: { speed1h: 2 } },
+    { tier: 'knight', name: 'Knight Chest', count: 6, reward: { gems: 100, gold: 20000, wood: 20000 }, items: { speed5m: 5 } },
+  ],
 };
 
 /* Academy technologies (on top of troop research). Max level = academy level. */
@@ -1301,11 +1344,12 @@ CH.State = (function () {
       army: { swordsman: 300, archer: 200, lightCavalry: 100 }, train: [], trainJobs: {}, wounded: {}, healJob: null,
       research: { troops, spells, techs }, rjob: null, heroes, defenseHero: 'aldric',
       items: { shield8h: 1, teleRandom: 1, teleAdvanced: 1, speed5m: 5, speed1h: 1 },
+      skins: { castle: ['classic'], hero: {} }, equipped: { castle: 'classic', hero: {} }, extraMarch: 0,
       shieldUntil: 0, createdAt: now, faction: null, factionChangedAt: 0, helpUsedAt: 0, reports: [], unread: 0, world: null,
       campaign: {}, raid: { trophies: 0, seed: 1000 + Math.floor(Math.random() * 1e6), opponents: [], wins: 0, attacks: 0 },
       defense: { best: 0, runs: 0, claimed: [] },
       player: { name: 'Lord of Eldoria', xp: 0, level: 1 },
-      stats: { battlesWon: 0, enemiesSlain: 0, buildingsRaided: 0, obstaclesCleared: 0, attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, troopsLost: 0, resourcesLooted: 0, monstersSlain: 0, deserted: 0 },
+      stats: { battlesWon: 0, enemiesSlain: 0, buildingsRaided: 0, obstaclesCleared: 0, attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, troopsLost: 0, resourcesLooted: 0, monstersSlain: 0, deserted: 0, kills: 0 },
       settings: { music: 0.45, sfx: 0.7, muted: false, damageNumbers: true },
       redeemed: [],
       introSeen: false, lastSeen: now,
@@ -1337,6 +1381,7 @@ CH.State = (function () {
     let m = 1 + 0.05 * ((s.research.techs || {}).prosperity || 0);
     if (s.faction != null && CH.FACTIONS && CH.FACTIONS[s.faction].bonus.prod) m += CH.FACTIONS[s.faction].bonus.prod;
     if (CH.World && s.world) m += CH.World.territoryBonus(s);
+    if (CH.Throne && s.world && CH.Throne.isPlayerKing(s)) m += CH.THRONE.kingBonus.prod;
     return m;
   }
   function productionPerMin(s, r) {
@@ -1635,7 +1680,33 @@ CH.State = (function () {
     for (const t in s.research.techs) p += 150 * s.research.techs[t];
     return Math.round(p);
   }
-  const marchSlots = s => 1 + Math.floor((castleLevel(s) + 1) / 3);
+  const baseMarchSlots = s => 1 + Math.floor((castleLevel(s) + 1) / 3);
+  const marchSlots = s => Math.min(CH.MAX_MARCHES, baseMarchSlots(s) + (s.extraMarch || 0));
+  function buyMarchSlot(s) {
+    if (marchSlots(s) >= CH.MAX_MARCHES) return { ok: false, reason: 'You already have the maximum of ' + CH.MAX_MARCHES + ' marches' };
+    const p = CH.GEM_SHOP.marchSlot(s.extraMarch || 0);
+    if (s.res.gems < p) return { ok: false, reason: 'Not enough gems (' + p + ' needed)' };
+    s.res.gems -= p; s.extraMarch = (s.extraMarch || 0) + 1;
+    return { ok: true, price: p };
+  }
+  const ownsSkin = (s, kind, id, hero) => id === 'classic' || (kind === 'castle' ? s.skins.castle.includes(id) : (s.skins.hero[hero] || []).includes(id));
+  function buySkin(s, kind, id, hero) {
+    const sk = CH.SKINS[id];
+    if (!sk || (kind === 'hero' && !CH.HEROES[hero])) return { ok: false, reason: 'Unknown skin' };
+    if (ownsSkin(s, kind, id, hero)) return { ok: false, reason: 'Already owned' };
+    const p = sk[kind];
+    if (s.res.gems < p) return { ok: false, reason: 'Not enough gems (' + p + ' needed)' };
+    s.res.gems -= p;
+    if (kind === 'castle') s.skins.castle.push(id); else (s.skins.hero[hero] = s.skins.hero[hero] || []).push(id);
+    equipSkin(s, kind, id, hero);
+    return { ok: true, price: p };
+  }
+  function equipSkin(s, kind, id, hero) {
+    if (!ownsSkin(s, kind, id, hero)) return false;
+    if (kind === 'castle') s.equipped.castle = id; else s.equipped.hero[hero] = id;
+    return true;
+  }
+  const heroSkin = (s, id) => (s.equipped && s.equipped.hero[id]) || 'classic';
   function trade(s, from, to, amount) {
     const lvl = highestLevel(s, 'tradingPost');
     if (!lvl) return { ok: false, reason: 'Build a Trading Post' };
@@ -1812,6 +1883,7 @@ CH.State = (function () {
     if (rw.troops) for (const t in rw.troops) if (CH.TROOPS[t]) s.army[t] = (s.army[t] || 0) + Math.max(0, Math.floor(rw.troops[t]));
     if (rw.items) for (const i in rw.items) if (CH.ITEMS[i]) s.items[i] = (s.items[i] || 0) + Math.max(0, Math.floor(rw.items[i]));
     if (rw.heroes) for (const h of rw.heroes) if (s.heroes[h]) s.heroes[h].unlocked = true;
+    if (rw.skins) for (const k of rw.skins) { const [kind, id, hero] = String(k).split(':'); if (CH.SKINS[id] && !ownsSkin(s, kind, id, hero)) { if (kind === 'castle') s.skins.castle.push(id); else if (CH.HEROES[hero]) (s.skins.hero[hero] = s.skins.hero[hero] || []).push(id); } }
     const levels = rw.xp ? addXp(s, rw.xp) : [];
     s.redeemed.push(h);
     return { ok: true, entry, levels };
@@ -1895,6 +1967,11 @@ CH.State = (function () {
     d.createdAt = num(raw.createdAt, 0, Date.now(), Date.now());
     d.faction = Number.isInteger(raw.faction) && raw.faction >= 0 && raw.faction < 4 ? raw.faction : null;
     d.factionChangedAt = num(raw.factionChangedAt, 0, Date.now(), 0); d.helpUsedAt = num(raw.helpUsedAt, 0, Date.now(), 0);
+    if (raw.skins && Array.isArray(raw.skins.castle)) d.skins.castle = ['classic', ...raw.skins.castle.filter(x => CH.SKINS[x] && x !== 'classic')];
+    if (raw.skins && raw.skins.hero) for (const h of CH.HERO_ORDER) if (Array.isArray(raw.skins.hero[h])) d.skins.hero[h] = raw.skins.hero[h].filter(x => CH.SKINS[x]);
+    if (raw.equipped) { if (d.skins.castle.includes(raw.equipped.castle)) d.equipped.castle = raw.equipped.castle; for (const h of CH.HERO_ORDER) { const v = raw.equipped.hero && raw.equipped.hero[h]; if (v && (d.skins.hero[h] || []).includes(v)) d.equipped.hero[h] = v; } }
+    d.extraMarch = Math.floor(num(raw.extraMarch, 0, CH.MAX_MARCHES, 0));
+    d.stats.kills = Math.floor(num(raw.stats && raw.stats.kills, 0, 1e12, 0));
     d.reports = Array.isArray(raw.reports) ? raw.reports.filter(r => r && typeof r.t === 'number' && typeof r.kind === 'string').slice(0, 60) : [];
     d.unread = Math.floor(num(raw.unread, 0, 999, 0));
     d.world = CH.World ? CH.World.validate(raw.world) : null;
@@ -1921,7 +1998,7 @@ CH.State = (function () {
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
     collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
-    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy,
+    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy, baseMarchSlots, buyMarchSlot, ownsSkin, buySkin, equipSkin, heroSkin,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,
     tick, goals, unlocksAt, redeem,
   };
@@ -2779,6 +2856,7 @@ CH.Audio = (function () {
       const u = this.spawnUnit(CH.HEROES[id], this.playerSide, x, y, { mult: m, hero: id, heroLevel: lvl, ax: x, ay: y });
       u.abilityCd = 3;
       this.heroesUsed[id] = u;
+      u.skin = CH.State.heroSkin(this.save, id);
       this.deployedAny = true;
       this.emit('sfx', 'heroDeploy');
       return { ok: true, unit: u };
@@ -3071,7 +3149,7 @@ CH.Audio = (function () {
       this.stepDt = 1 / 30;
       this.timeLimit = cfg.timeLimit || 120;
       this.opponent = { cl: cfg.cl };
-      this.homeTerrain = !!cfg.homeTerrain;
+      this.homeTerrain = !!cfg.homeTerrain; this.castleSkin = cfg.castleSkin || null;
       this.dmgBy = { atk: 0, def: 0 };
       this.army = {}; this.heroesAvail = []; this.spells = {};
       const fm = cfg.fortMult || 1;
@@ -3095,7 +3173,7 @@ CH.Audio = (function () {
       });
       cfg.def.heroes.forEach((h, i) => {
         const u = this.spawnUnit(CH.HEROES[h.id], 'def', cx + (i ? -1 : 1) * 1.5 * T, cy + 1.6 * T, { mult: CH.State.heroMult(h.level) * 1.2, hero: h.id, heroLevel: h.level });
-        u.autoHero = true; u.abilityCd = 4; u.leash = 14 * T;
+        u.autoHero = true; u.abilityCd = 4; u.leash = 14 * T; u.skin = h.skin;
       });
       // Attackers deploy in waves from the side they marched in from.
       this.deployQ = this.formationPlan(cfg);
@@ -3142,7 +3220,7 @@ CH.Audio = (function () {
         const d = this.deployQ.shift();
         if (d.hero) {
           const u = this.spawnUnit(CH.HEROES[d.hero.id], 'atk', d.x, d.y, { mult: CH.State.heroMult(d.hero.level) * 1.2, hero: d.hero.id, heroLevel: d.hero.level });
-          u.autoHero = true; u.abilityCd = 3;
+          u.autoHero = true; u.abilityCd = 3; u.skin = d.hero.skin;
         } else this.squads.push(this.spawnSquad(CH.TROOPS[d.sq.type], 'atk', d.sq, d.x, d.y));
       }
     }
@@ -3442,7 +3520,7 @@ CH.Siege = (function () {
     const w = { v: 1, seed, epoch: now, lastTick: now, nextId: 1, kingdoms: [], tiles: [], camps: [], ruins: [], forts: [], marches: [], news: [], px: 0, py: 0,
       lastIncomingAt: 0, offline: 0, eventIdx: -1, fpts: [0, 0, 0, 0], territoryAward: -1 };
     const taken = [];
-    const free = (x, y, r) => x > 1 && y > 1 && x < N - 2 && y < N - 2 && !taken.some(p => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
+    const free = (x, y, r) => x > 1 && y > 1 && x < N - 2 && y < N - 2 && Math.hypot(x - N / 2, y - N / 2) > 7 && !taken.some(p => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
     const place = (minR, maxR, r, tries = 400) => {
       for (let i = 0; i < tries; i++) {
         const a = rnd() * Math.PI * 2, d = (minR + rnd() * (maxR - minR)) * N / 2;
@@ -3487,12 +3565,14 @@ CH.Siege = (function () {
     for (let i = 0; i < 6; i++) { const p = place(0.3, 0.6, 4); if (p) w.forts.push({ id: 'f' + w.nextId++, x: p.x, y: p.y, lvl: 4 + Math.floor(rnd() * 3), bonus: fortBonus[i], owner: null, ownerName: null, ownerF: null }); }
     for (const k of w.kingdoms) { k.last = now; k.next = now + Math.floor(rnd() * C.AI_THINK * 1000); k.nextAtk = now + (5 + rnd() * 20) * MIN; }
     w.news.push({ t: now, text: 'The realm of Eldoria awakens. ' + w.kingdoms.length + ' kingdoms vie for power.', kind: 'world' });
+    if (CH.Throne) CH.Throne.ensure(w);
     return w;
   }
 
   /* ---------------- Queries ---------------- */
   const W = s => s.world;
-  const findAny = (w, id) => w.kingdoms.find(k => k.id === id) || w.camps.find(c => c.id === id) || w.tiles.find(t => t.id === id) || w.ruins.find(r => r.id === id) || w.forts.find(f => f.id === id) || (w.dragon && w.dragon.id === id ? w.dragon : null);
+  const findAny = (w, id) => id === 'throne' ? w.throne : findAny0(w, id);
+  const findAny0 = (w, id) => w.kingdoms.find(k => k.id === id) || w.camps.find(c => c.id === id) || w.tiles.find(t => t.id === id) || w.ruins.find(r => r.id === id) || w.forts.find(f => f.id === id) || (w.dragon && w.dragon.id === id ? w.dragon : null);
   function eventAt(w, T) {
     const i = Math.floor((T - w.epoch) / EVENT_CYCLE);
     const inside = (T - w.epoch) % EVENT_CYCLE < EVENT_LEN;
@@ -3580,6 +3660,8 @@ CH.Siege = (function () {
       const n = Math.floor(Math.min(target - cur, Math.max(0, k.res.food) / per, Math.max(0, k.res.gold) / per, (target - cur) * 0.45 + 20));
       if (n > 0) { trainAI(k, n, rnd); k.res.food -= n * per * 0.8; k.res.gold -= n * per * 0.8; }
     }
+    // During the Throne War the Citadel comes first.
+    if (CH.Throne && CH.Throne.aiDecide(s, k, T, ev, rnd)) return;
     // War
     if (k.out || T < k.nextAtk || armyCount(k.tr) < target * 0.4) return;
     const myPow = armyPower(k.tr) * P.send * (1 + 0.04 * k.hl);
@@ -3630,6 +3712,7 @@ CH.Siege = (function () {
     if (T - w.lastIncomingAt < C.INCOMING_GAP_MIN * MIN) return false;
     if (w.marches.some(m => m.target && m.target.type === 'player' && m.kind === 'attack')) return false;
     if (k.pcd > T) return false;
+    if (k.friendUntil > T) return false; // rewarded by you as king: loyal for your reign
     if (w.offline >= 0 && w.offlineAttacks >= C.MAX_OFFLINE_ATTACKS) return false;
     const myPow = armyPower(k.tr) * CH.PERSONALITIES[k.p].send;
     const pp = playerDefPower(s);
@@ -3725,6 +3808,7 @@ CH.Siege = (function () {
     if (m.kind === 'scout') { scoutReport(s, m, T, ev); returnMarch(w, m, T, m.army, {}); return; }
     // ---- attacks ----
     const tgt = m.target;
+    if (tgt.type === 'throne') return CH.Throne.arrive(s, m, T, ev);
     if (tgt.type === 'player') return defendPlayer(s, m, owner, T, ev);
     if (m.owner === 'player') return playerAttack(s, m, T, ev);
     // AI vs AI / neutral
@@ -3739,6 +3823,8 @@ CH.Siege = (function () {
       let loot = {};
       if (res.win) { loot = takeLoot(lootable(d.res, 0.3), loadOf(m.army) * (CH.PERSONALITIES[owner.p].loot || 1)); for (const r in loot) d.res[r] -= loot[r]; }
       owner.wins += res.win ? 1 : 0; owner.losses += res.win ? 0 : 1; d.losses += res.win ? 1 : 0;
+      owner.kills = (owner.kills || 0) + armyCount(dLost); d.kills = (d.kills || 0) + armyCount(aLost);
+      if (res.win) d.burn = T + 10 * MIN; else d.smoke = T + 6 * MIN;
       d.lastBy = owner.id;
       if (res.win && (d.p === 'defensive' || d.p === 'peaceful')) d.sh = T + 60 * MIN;
       const tot = Object.values(loot).reduce((a, n) => a + n, 0);
@@ -3780,7 +3866,7 @@ CH.Siege = (function () {
     const cl = CH.State.castleLevel(s);
     const homeHeroes = [];
     const busy = new Set(w.marches.filter(x => x.owner === 'player').map(x => x.hero));
-    if (s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero)) homeHeroes.push({ id: s.defenseHero, level: s.heroes[s.defenseHero].level });
+    if (s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero)) homeHeroes.push({ id: s.defenseHero, level: s.heroes[s.defenseHero].level, skin: CH.State.heroSkin(s, s.defenseHero) });
     const garrison = { ...s.army };
     let helpers = 0;
     if (s.helpUntil > T && s.faction != null) {
@@ -3798,6 +3884,7 @@ CH.Siege = (function () {
         army: garrison, heroes: homeHeroes, research: s.research.troops, fortBonus },
       formation: U.pick(['surround', 'spearhead', 'pincer'], U.rng(T % 1e9)), dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
+    cfg.castleSkin = s.equipped ? s.equipped.castle : null;
     const sum = CH.Siege.run(cfg);
     // Defender casualties (only the player's own troops; helpers' losses are theirs).
     const ownLost = {};
@@ -3815,6 +3902,8 @@ CH.Siege = (function () {
     }
     // Recovery period: the worse it went for you, the longer the protection.
     s.shieldUntil = Math.max(s.shieldUntil, T + C.POST_ATTACK_SHIELD_MIN * MIN * (outcome === 'win' ? 2 : outcome === 'partial' ? 1.5 : 1));
+    s.stats.kills += armyCount(sum.atk.lost); owner.kills = (owner.kills || 0) + armyCount(sum.def.lost);
+    if (outcome === 'win') w.pburn = T + 10 * MIN; else w.psmoke = T + 6 * MIN;
     owner.grudge = outcome === 'loss' ? Math.min(5, owner.grudge + (CH.PERSONALITIES[owner.p].aggr > 0.5 ? 1 : 0)) : owner.grudge;
     let reward = {};
     if (outcome === 'loss') {
@@ -3865,8 +3954,10 @@ CH.Siege = (function () {
   /** The player's march arrives at its target: build and run the battle. */
   function playerAttack(s, m, T, ev) {
     const w = W(s), tgt = m.target;
-    const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level } : null;
-    const attacker = { name: s.player.name, army: m.army, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
+    const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero) } : null;
+    const own = m.army, mergedArmy = { ...m.army };
+    for (const x of m.allies || []) for (const t in x.army) mergedArmy[t] = (mergedArmy[t] || 0) + x.army[t];
+    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
     const dir = { x: m.tx - m.fx, y: m.ty - m.fy }, seed = (T % 1e9) | 0;
     let cfg, defender, target;
     if (tgt.type === 'kingdom') {
@@ -3888,11 +3979,16 @@ CH.Siege = (function () {
     }
     cfg = CH.Siege.build({ attacker, defender, formation: m.formation || 'surround', dir, seed, playerSide: 'atk' });
     const sum = CH.Siege.run(cfg);
-    // Player casualties: half wounded (infirmary), half dead.
-    for (const t in sum.atk.lost) m.army[t] = Math.max(0, (m.army[t] || 0) - sum.atk.lost[t]);
-    const half = {}; for (const t in sum.atk.lost) half[t] = Math.floor(sum.atk.lost[t] * 0.5);
+    // Survivors are shared out by contribution; rally allies take theirs home.
+    const ratio = t => (sum.atk.sent[t] ? (sum.atk.left[t] || 0) / sum.atk.sent[t] : 0);
+    const ownLost = {};
+    for (const t in own) { const keep = Math.floor(own[t] * ratio(t)); if (own[t] - keep > 0) ownLost[t] = own[t] - keep; m.army[t] = keep; }
+    for (const x of m.allies || []) { const k = w.kingdoms.find(o => o.id === x.id); if (k) { for (const t in x.army) k.tr[t] = (k.tr[t] || 0) + Math.floor(x.army[t] * ratio(t)); k.out = false; } }
+    // Your casualties: half wounded (infirmary), half dead.
+    const half = {}; for (const t in ownLost) half[t] = Math.floor(ownLost[t] * 0.5);
     const cas = CH.State.addCasualties(s, half);
-    cas.dead += Object.values(sum.atk.lost).reduce((a, n) => a + n, 0) - Object.values(half).reduce((a, n) => a + n, 0);
+    cas.dead += armyCount(ownLost) - armyCount(half);
+    s.stats.kills += armyCount(sum.def.lost);
     const won = sum.outcome !== 'loss';
     let loot = {}, reward = {}, items = {};
     if (tgt.type === 'kingdom') {
@@ -3907,6 +4003,8 @@ CH.Siege = (function () {
         k.losses++;
       } else k.wins++;
       k.tcd = T + C.TARGET_COOLDOWN_MIN * MIN;
+      k.kills = (k.kills || 0) + armyCount(sum.atk.lost);
+      if (sum.outcome === 'win') k.burn = T + 10 * MIN; else k.smoke = T + 6 * MIN;
       k.grudge = Math.min(5, k.grudge + (CH.PERSONALITIES[k.p].aggr >= 0.45 ? 2 : 1));
       k.lastBy = 'player';
       if (won && (k.p === 'defensive' || k.p === 'peaceful')) k.sh = T + 45 * MIN;
@@ -3966,6 +4064,10 @@ CH.Siege = (function () {
         byClass: lvl >= 1 ? Object.fromEntries(Object.entries(k.tr).reduce((m2, [t, n]) => { const c = CH.TROOPS[t].cls; m2.set(c, (m2.get(c) || 0) + n); return m2; }, new Map())) : null,
         troops: lvl >= 2 ? { ...k.tr } : null, power: Math.round(aiDefPower(k)),
         layout: CH.Raid.layout(k.seed + k.cl * 7, k.cl, k.cl <= 1 ? 'beginner' : P.arch), hist: k.hist.slice(0, 3) };
+    } else if (m.target.type === 'throne') {
+      const war = k.war && !k.war.ended ? k.war : null;
+      rep = { t: T, kind: 'scout', title: 'Scout report: ' + CH.THRONE.name, outcome: 'win', coords: [k.x, k.y], targetId: 'throne', monsters: war ? war.garrison : {},
+        note: war ? 'Held by ' + CH.Throne.keyName(s, war.holder) : 'No war in progress. The Citadel opens on Saturday at ' + CH.THRONE.warHour + ':00.' };
     } else {
       rep = { t: T, kind: 'scout', title: 'Scout report: (' + k.x + ',' + k.y + ')', outcome: 'win', coords: [k.x, k.y], targetId: k.id, monsters: campMonsters(k, w, T) };
     }
@@ -3976,6 +4078,7 @@ CH.Siege = (function () {
   /* ---------------- World tick ---------------- */
   function processUntil(s, T, ev) {
     const w = W(s);
+    if (CH.Throne) CH.Throne.update(s, T, ev);
     // Arrivals in time order.
     for (;;) {
       let nxt = null;
@@ -4031,14 +4134,21 @@ CH.Siege = (function () {
   /* ---------------- Player actions ---------------- */
   function ensure(s, now = Date.now()) {
     if (!s.world) s.world = create(Math.floor(Math.random() * 1e9) + 1, now);
+    if (CH.Throne) CH.Throne.ensure(s.world);
     return s.world;
   }
   function playerMarches(s) { return W(s).marches.filter(m => m.owner === 'player'); }
   function busyHeroes(s) { return new Set(playerMarches(s).map(m => m.hero).filter(Boolean)); }
 
   /** kind: 'attack' | 'scout' | 'gather'. target: {type, id}. */
-  function sendMarch(s, kind, target, army, heroId, formation, now = Date.now()) {
+  function sendMarch(s, kind, target, army, heroId, formation, now = Date.now(), opts = {}) {
     const w = W(s);
+    if (target.type === 'throne') {
+      const war = w.throne.war;
+      if (kind === 'scout') { /* allowed any time */ }
+      else if (!war || war.ended || now >= war.end) return { ok: false, reason: 'The Citadel can only be attacked during the Throne War (Saturday ' + CH.THRONE.warHour + ':00)' };
+    }
+    if (opts.rally && s.faction == null) return { ok: false, reason: 'Join a faction to start a rally' };
     if (kind !== 'scout' && playerMarches(s).filter(m => m.kind !== 'return' && m.kind !== 'scout').length >= CH.State.marchSlots(s)) return { ok: false, reason: 'All march slots are in use (' + CH.State.marchSlots(s) + ')' };
     const obj = target.type === 'kingdom' ? w.kingdoms.find(k => k.id === target.id) : findAny(w, target.id);
     if (!obj) return { ok: false, reason: 'Target not found' };
@@ -4065,6 +4175,11 @@ CH.Siege = (function () {
     const secs = marchSeconds(from, obj, army, marchSpeedMult(s, heroId), kind);
     const m = { id: 'm' + w.nextId++, owner: 'player', kind, fx: w.px, fy: w.py, tx: obj.x, ty: obj.y, t0: now, t1: now + secs * 1000, army: { ...army }, hero: kind === 'scout' ? null : heroId || null,
       heroLevel: heroId ? s.heroes[heroId].level : 0, formation: formation || 'surround', target: { type: target.type, id: target.id }, cargo: {} };
+    if (opts.rally && kind === 'attack') {
+      const al = CH.Throne.rallyAllies(s, obj);
+      m.allies = al.map(x => { for (const t in x.army) x.k.tr[t] -= x.army[t]; x.k.out = true; return { id: x.k.id, name: x.k.name, army: x.army }; });
+      m.rally = true; m.t1 += CH.THRONE.rallyMuster * 1000;
+    }
     w.marches.push(m);
     return { ok: true, march: m };
   }
@@ -4079,12 +4194,14 @@ CH.Siege = (function () {
       w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: m.tx, fy: m.ty, tx: w.px, ty: w.py, t0: now, t1: now + (m.travel || 30000), cargo: tile ? { [tile.type]: got } : {}, target: { type: 'home' } });
       return true;
     }
+    for (const x of m.allies || []) { const k = w.kingdoms.find(o => o.id === x.id); if (k) { for (const t in x.army) k.tr[t] = (k.tr[t] || 0) + x.army[t]; k.out = false; } }
     const f = U.clamp((now - m.t0) / (m.t1 - m.t0), 0, 1);
     const cx = m.fx + (m.tx - m.fx) * f, cy = m.fy + (m.ty - m.fy) * f;
     w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: cx, fy: cy, tx: m.fx, ty: m.fy, t0: now, t1: now + Math.max(5000, now - m.t0), cargo: {}, target: { type: 'home' } });
     return true;
   }
   function occupiedNear(w, x, y, r = 2) {
+    if (w.throne && Math.hypot(w.throne.x - x, w.throne.y - y) < 6) return true;
     if (Math.abs(w.px - x) <= r && Math.abs(w.py - y) <= r) return true;
     for (const L of [w.kingdoms, w.tiles, w.camps, w.ruins, w.forts]) for (const o of L) if (Math.abs(o.x - x) <= r && Math.abs(o.y - y) <= r) return true;
     return false;
@@ -4152,14 +4269,314 @@ CH.Siege = (function () {
     for (const k of raw.kingdoms) { for (const r of ['gold', 'wood', 'stone', 'food']) k.res[r] = Math.max(0, +k.res[r] || 0); for (const t in k.tr) if (!CH.TROOPS[t] || !(k.tr[t] >= 0)) delete k.tr[t]; if (k.last > now) k.last = now; }
     for (const L of ['tiles', 'camps', 'ruins', 'forts', 'news']) if (!Array.isArray(raw[L])) raw[L] = [];
     if (!Array.isArray(raw.fpts)) raw.fpts = [0, 0, 0, 0];
+    if (CH.Throne) CH.Throne.ensure(raw);
     return raw;
   }
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
     sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
-    territoryBonus, onShield, findAny, campMonsters, campRewards, dist, N, heroXp, PKEYS,
+    territoryBonus, onShield, findAny, campMonsters, clash, addReport, campRewards, dist, N, heroXp, PKEYS,
   };
+})();
+
+</script>
+  <script>/* js/core/throne.js */
+/* =====================================================================
+ * Eldoria — core/throne.js
+ * The Aurelion Citadel at the heart of the world and the weekly
+ * Throne War (Saturday 15:00 local time, 30 minutes).
+ *
+ *  - When the war opens, the Citadel is held by its Guardians.
+ *  - Any kingdom may attack it; factions may RALLY (up to 10 castles).
+ *  - Whoever takes it garrisons it with their surviving troops and
+ *    starts accumulating hold time. Losing it stops the clock.
+ *  - When the war ends, the contender with the LONGEST TOTAL HOLD TIME
+ *    becomes King of Eldoria until the next war (one week) and may
+ *    hand out the treasure prepared in the Citadel.
+ * ===================================================================== */
+CH.Throne = (function () {
+  const C = CH.CONFIG, U = CH.util, TH = CH.THRONE, MIN = 60000, DAY = 864e5;
+  const W = s => s.world;
+  const armyCount = a => Object.values(a || {}).reduce((x, n) => x + (n || 0), 0);
+  const sum = o => Object.values(o || {}).reduce((x, n) => x + (n || 0), 0);
+
+  /** The war window for the week containing T (local time). */
+  function warWindow(T) {
+    const d = new Date(T);
+    const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() - TH.warDay + 7) % 7), TH.warHour, 0, 0, 0);
+    let start = sat.getTime();
+    if (start > T) start = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() - 7, TH.warHour).getTime();
+    const end = start + TH.warMinutes * MIN;
+    const next = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), new Date(start).getDate() + 7, TH.warHour).getTime();
+    return { start, end, next, active: T >= start && T < end };
+  }
+
+  function freshPrizes() { const out = []; for (const p of TH.prizes) for (let i = 0; i < p.count; i++) out.push({ id: p.tier + i, tier: p.tier, given: null }); return out; }
+
+  /** Adds the Citadel to a world (new or old save) and clears the land around it. */
+  function ensure(w) {
+    const c = Math.floor(w.size || CH.CONFIG.WORLD_SIZE) / 2 | 0;
+    if (!w.throne) {
+      w.throne = { id: 'throne', x: c, y: c, king: null, history: [], war: null, prizes: freshPrizes(), burn: 0, smoke: 0, rallyCd: [0, 0, 0, 0] };
+      // Move anything too close to the centre outwards.
+      for (const L of [w.kingdoms, w.tiles, w.camps, w.ruins, w.forts]) for (const o of L) {
+        const dx = o.x - c, dy = o.y - c, d = Math.hypot(dx, dy);
+        if (d < 6) { const a = d ? Math.atan2(dy, dx) : Math.random() * 6.283; o.x = Math.round(c + Math.cos(a) * (7 + Math.random() * 3)); o.y = Math.round(c + Math.sin(a) * (7 + Math.random() * 3)); }
+      }
+      if (Math.hypot(w.px - c, w.py - c) < 6) { w.px = c + 9; w.py = c + 9; }
+    }
+    for (const k of w.kingdoms) { if (k.kills == null) k.kills = 0; }
+    if (w.pkills == null) w.pkills = 0;
+    return w.throne;
+  }
+
+  const keyName = (s, key) => key === 'player' ? s.player.name : key === 'guard' ? 'Citadel Guardians' : (W(s).kingdoms.find(k => k.id === key) || { name: '?' }).name;
+  const keyFaction = (s, key) => key === 'player' ? s.faction : key === 'guard' ? null : (W(s).kingdoms.find(k => k.id === key) || {}).f;
+  const isPlayerKing = s => { const t = W(s) && W(s).throne; return !!(t && t.king && t.king.key === 'player' && t.king.until > Date.now()); };
+
+  /** Guardians scale with the strongest kingdoms so the first capture is a real fight. */
+  function guardians(w) {
+    const top = w.kingdoms.map(k => CH.World.armyPower(k.tr)).sort((a, b) => b - a).slice(0, 5);
+    const p = (top.reduce((a, n) => a + n, 0) / Math.max(1, top.length)) * 0.6 + 8000;
+    return { knight: Math.round(p * 0.35 / CH.troopPower('knight')), longbowman: Math.round(p * 0.3 / CH.troopPower('longbowman')), heavyCavalry: Math.round(p * 0.25 / CH.troopPower('heavyCavalry')), paladin: Math.round(p * 0.1 / CH.troopPower('paladin')) };
+  }
+  /** The Citadel's fortifications for battles fought there. */
+  function layout() {
+    const L = [{ type: 'castle', level: 8, tx: 14, ty: 10 }];
+    for (let x = 9; x <= 20; x++) for (const y of [5, 16]) L.push({ type: 'wall', level: 7, tx: x, ty: y });
+    for (let y = 6; y <= 15; y++) for (const x of [9, 20]) L.push({ type: 'wall', level: 7, tx: x, ty: y });
+    [[10, 6, 'archerTower'], [18, 6, 'wizardTower'], [10, 14, 'cannon'], [18, 14, 'archerTower'], [12, 8, 'ballista'], [16, 12, 'infernoTower']].forEach(([x, y, t]) => L.push({ type: t, level: 6, tx: x, ty: y }));
+    return L.filter(l => CH.BUILDINGS[l.type]);
+  }
+
+  function setHolder(s, key, army, shares, T) {
+    const war = W(s).throne.war;
+    closeHold(war, T);
+    war.holder = key; war.holderF = keyFaction(s, key); war.holdStart = T; war.garrison = army; war.shares = shares || { [key]: 1 };
+    war.names[key] = keyName(s, key);
+  }
+  function closeHold(war, T) { if (war.holder && war.holder !== 'guard') war.hold[war.holder] = (war.hold[war.holder] || 0) + Math.max(0, T - war.holdStart); war.holdStart = T; }
+  /** Returns garrison troops to their owners by their share. */
+  function releaseGarrison(s, T) {
+    const w = W(s), war = w.throne.war;
+    if (!war || !war.garrison || war.holder === 'guard') return;
+    for (const key in war.shares) {
+      const part = {}; for (const t in war.garrison) { const n = Math.floor(war.garrison[t] * war.shares[key]); if (n) part[t] = n; }
+      if (!armyCount(part)) continue;
+      if (key === 'player') w.marches.push({ id: 'm' + w.nextId++, owner: 'player', kind: 'return', fx: w.throne.x, fy: w.throne.y, tx: w.px, ty: w.py, t0: T, t1: T + 60000, army: part, cargo: {}, target: { type: 'home' } });
+      else { const k = w.kingdoms.find(x => x.id === key); if (k) for (const t in part) k.tr[t] = (k.tr[t] || 0) + part[t]; }
+    }
+    war.garrison = {};
+  }
+  function addKills(s, key, n) {
+    const w = W(s), war = w.throne.war;
+    if (war) war.kills[key] = (war.kills[key] || 0) + n;
+    if (key === 'player') s.stats.kills += n; else { const k = w.kingdoms.find(x => x.id === key); if (k) k.kills += n; }
+  }
+
+  /** Called every world step. */
+  function update(s, T, ev) {
+    const w = W(s), th = ensure(w), win = warWindow(T);
+    if (win.active && (!th.war || th.war.id !== win.start)) {
+      th.war = { id: win.start, end: win.end, holder: 'guard', holderF: null, holdStart: T, garrison: guardians(w), shares: {}, hold: {}, kills: {}, names: {}, ended: false, attacks: 0 };
+      th.rallyCd = [0, 0, 0, 0];
+      w.news.unshift({ t: T, text: '👑 The Throne War has begun! Seize the ' + TH.name + ' and hold it longest to become ' + TH.title + '.', kind: 'event' });
+      ev.push({ kind: 'warStart' });
+    }
+    if (th.war && !th.war.ended && T >= th.war.end) endWar(s, th.war.end, ev);
+    if (th.king && th.king.until <= T) { th.king = null; }
+  }
+
+  function endWar(s, T, ev) {
+    const w = W(s), th = w.throne, war = th.war;
+    closeHold(war, T);
+    war.ended = true;
+    releaseGarrison(s, T);
+    const ranking = Object.entries(war.hold).sort((a, b) => b[1] - a[1]);
+    if (ranking.length) {
+      const [key, ms] = ranking[0];
+      th.king = { key, name: war.names[key] || keyName(s, key), f: keyFaction(s, key), since: T, until: warWindow(T).next, held: ms };
+      th.prizes = freshPrizes();
+      th.history.unshift({ t: T, name: th.king.name, held: ms }); th.history.length = Math.min(th.history.length, 10);
+      w.news.unshift({ t: T, text: '👑 ' + th.king.name + ' held the ' + TH.name + ' for ' + U.time(ms / 1000) + ' and is crowned ' + TH.title + '!', kind: 'event' });
+      th.burn = 0; th.smoke = T + 10 * MIN;
+      if (key !== 'player') aiKingGifts(s, T);
+      CH.World.addReport(s, { t: T, kind: 'event', title: key === 'player' ? '👑 You are the ' + TH.title + '! Hand out the Citadel\'s treasure.' : '👑 ' + th.king.name + ' is the new ' + TH.title, outcome: key === 'player' ? 'win' : 'loss', coords: [th.x, th.y] });
+      ev.push({ kind: 'report', report: s.reports[0], alert: key === 'player' });
+    } else {
+      w.news.unshift({ t: T, text: 'The Guardians held the ' + TH.name + '. No king this week.', kind: 'event' });
+    }
+  }
+
+  /** An AI king shares the treasure with its faction; you get a chest if you're in it. */
+  function aiKingGifts(s, T) {
+    const w = W(s), th = w.throne, f = th.king.f;
+    const members = w.kingdoms.filter(k => k.f === f && k.id !== th.king.key).sort((a, b) => CH.World.power(b) - CH.World.power(a));
+    let i = 0;
+    for (const p of th.prizes) {
+      if (s.faction === f && !th.prizes.some(x => x.given === 'player') && p.tier !== 'royal') { give(s, p, 'player', T); continue; }
+      const k = p.tier === 'royal' ? null : members[i++];
+      p.given = k ? k.id : th.king.key;
+    }
+  }
+  function give(s, p, key, T) {
+    const w = W(s), def = TH.prizes.find(x => x.tier === p.tier);
+    p.given = key;
+    if (key === 'player') {
+      for (const r in def.reward) s.res[r] = (s.res[r] || 0) + def.reward[r];
+      for (const i in def.items) s.items[i] = (s.items[i] || 0) + def.items[i];
+      CH.World.addReport(s, { t: T, kind: 'event', title: '🎁 ' + (w.throne.king ? w.throne.king.name : 'The king') + ' gave you a ' + def.name, outcome: 'win', reward: def.reward, items: def.items });
+    } else {
+      const k = w.kingdoms.find(x => x.id === key);
+      if (k) { for (const r in def.reward) if (k.res[r] != null) k.res[r] += def.reward[r]; if (w.throne.king && w.throne.king.key === 'player') { k.grudge = 0; k.friendUntil = w.throne.king.until; } }
+    }
+  }
+  /** Player king hands out a prize. You may keep one chest of each tier. */
+  function distribute(s, prizeId, key, now = Date.now()) {
+    const th = W(s).throne;
+    if (!isPlayerKing(s)) return { ok: false, reason: 'Only the king can hand out the treasure' };
+    const p = th.prizes.find(x => x.id === prizeId);
+    if (!p || p.given) return { ok: false, reason: 'Already given' };
+    if (key === 'player' && th.prizes.some(x => x.tier === p.tier && x.given === 'player')) return { ok: false, reason: 'You already kept a ' + TH.prizes.find(x => x.tier === p.tier).name };
+    if (key !== 'player' && !W(s).kingdoms.find(k => k.id === key)) return { ok: false, reason: 'Unknown kingdom' };
+    give(s, p, key, now);
+    if (key !== 'player') W(s).news.unshift({ t: now, text: '🎁 ' + TH.title + ' ' + s.player.name + ' rewarded ' + keyName(s, key) + ' with a ' + TH.prizes.find(x => x.tier === p.tier).name + '.', kind: 'event' });
+    return { ok: true };
+  }
+
+  /* ---------------- AI during the war ---------------- */
+  function aiDecide(s, k, T, ev, rnd) {
+    const w = W(s), th = w.throne, war = th.war;
+    if (!war || war.ended || T >= war.end || k.out) return false;
+    if (war.holder === k.id) return true; // holds it: stays put
+    const P = CH.PERSONALITIES[k.p];
+    if (war.holderF != null && war.holderF === k.f) return true; // an ally holds it
+    const inFlight = w.marches.filter(m => m.target.type === 'throne' && m.owner !== 'player').length;
+    if (inFlight >= 10 || armyCount(k.tr) < 50) return false;
+    if (rnd() > 0.25 + P.aggr * 0.4) return false;
+    // The strongest free member of a faction leads a rally when the faction is ready.
+    let allies = [];
+    if (th.rallyCd[k.f] <= T) {
+      const mem = w.kingdoms.filter(o => o !== k && o.f === k.f && !o.out && armyCount(o.tr) > 50 && war.holder !== o.id).sort((a, b) => CH.World.power(b) - CH.World.power(a)).slice(0, TH.rallyMax - 1);
+      if (mem.length >= 2) { allies = mem; th.rallyCd[k.f] = T + 6 * MIN; }
+    }
+    const take = (o, f) => { const a = {}; for (const t in o.tr) { const n = Math.floor(o.tr[t] * f); if (n) { a[t] = n; o.tr[t] -= n; } } return a; };
+    const army = take(k, P.send);
+    const al = allies.map(o => { o.out = true; return { id: o.id, name: o.name, army: take(o, 0.4) }; }).filter(a => armyCount(a.army));
+    const secs = Math.max(CH.World.marchSeconds(k, th, army), 30) + (al.length ? TH.rallyMuster : 0);
+    k.out = true;
+    w.marches.push({ id: 'm' + w.nextId++, owner: k.id, kind: 'attack', fx: k.x, fy: k.y, tx: th.x, ty: th.y, t0: T, t1: T + secs * 1000, army, hero: k.hero, heroLevel: k.hl, allies: al, rally: al.length > 0, target: { type: 'throne', id: 'throne' }, cargo: {} });
+    if (al.length) w.news.unshift({ t: T, text: '⚔ ' + k.name + ' leads a rally of ' + (al.length + 1) + ' ' + CH.FACTIONS[k.f].name + ' castles on the ' + TH.name + '!', kind: 'war' });
+    return true;
+  }
+
+  /** Splits the merged army's survivors back to the march owner and its rally allies. */
+  function merged(m) { const a = { ...m.army }; for (const x of m.allies || []) for (const t in x.army) a[t] = (a[t] || 0) + x.army[t]; return a; }
+  function splitSurvivors(m, sent, left) {
+    const ratio = t => (sent[t] ? (left[t] || 0) / sent[t] : 0);
+    const own = {}; for (const t in m.army) { const n = Math.floor(m.army[t] * ratio(t)); if (n) own[t] = n; }
+    const al = (m.allies || []).map(x => { const a = {}; for (const t in x.army) { const n = Math.floor(x.army[t] * ratio(t)); if (n) a[t] = n; } return { id: x.id, army: a }; });
+    return { own, allies: al };
+  }
+  function sharesOf(m, split) {
+    const tot = armyCount(split.own) + split.allies.reduce((a, x) => a + armyCount(x.army), 0) || 1;
+    const sh = { [m.owner]: armyCount(split.own) / tot };
+    for (const x of split.allies) sh[x.id] = (sh[x.id] || 0) + armyCount(x.army) / tot;
+    return sh;
+  }
+  function freeAllies(s, m) { for (const x of m.allies || []) { const k = W(s).kingdoms.find(o => o.id === x.id); if (k) k.out = false; } }
+
+  /** A march reaches the Citadel. */
+  function arrive(s, m, T, ev) {
+    const w = W(s), th = ensure(w), war = th.war;
+    const owner = m.owner === 'player' ? null : w.kingdoms.find(k => k.id === m.owner);
+    const goHome = (army, extra) => {
+      if (armyCount(army)) w.marches.push({ id: 'm' + w.nextId++, owner: m.owner, kind: 'return', fx: th.x, fy: th.y, tx: m.owner === 'player' ? w.px : m.fx, ty: m.owner === 'player' ? w.py : m.fy, t0: T, t1: T + Math.max(20000, m.t1 - m.t0 - (m.rally ? TH.rallyMuster * 1000 : 0)), army, cargo: {}, hero: m.hero, heroLevel: m.heroLevel, target: { type: 'home' }, ...(extra || {}) });
+      else if (owner) owner.out = false;
+    };
+    const returnAllies = split => { for (const x of split.allies) { const k = w.kingdoms.find(o => o.id === x.id); if (k) { for (const t in x.army) k.tr[t] = (k.tr[t] || 0) + x.army[t]; k.out = false; } } };
+    if (!war || war.ended || T >= war.end) { freeAllies(s, m); goHome(merged(m)); return; }
+    const key = m.owner;
+    // Reinforcing your own garrison.
+    if (war.holder === key) { for (const t in m.army) war.garrison[t] = (war.garrison[t] || 0) + m.army[t]; freeAllies(s, m); return; }
+    war.attacks++;
+    const atkArmy = merged(m), defKey = war.holder;
+    let outcome, sent = atkArmy, left = {}, defLost = {}, rep = null;
+    if (key === 'player' || defKey === 'player') {
+      // Full engine battle at the Citadel.
+      const playerAtk = key === 'player';
+      const hero = playerAtk ? (m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero) } : null) : { id: m.hero, level: m.heroLevel };
+      const cfg = CH.Siege.build({
+        attacker: { name: keyName(s, key), army: atkArmy, hero, research: playerAtk ? s.research.troops : {}, atkBonus: playerAtk ? 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) : 0.03 * (owner ? owner.cl : 1) },
+        defender: { name: TH.name + ' (' + keyName(s, defKey) + ')', kind: 'camp', cl: 8, layout: layout(), army: defKey === 'guard' ? null : war.garrison, monsters: null, heroes: [], research: defKey === 'player' ? s.research.troops : {}, fortBonus: 0.2 },
+        formation: m.formation || 'surround', dir: { x: th.x - m.fx, y: th.y - m.fy }, seed: (T % 1e9) | 0, playerSide: playerAtk ? 'atk' : 'def',
+      });
+      if (defKey === 'guard') { cfg.def.squads = CH.Siege.squads(war.garrison).map(q => ({ ...q, mult: 1.25 })); }
+      cfg.names = { atk: keyName(s, key), def: keyName(s, defKey) };
+      const r = CH.Siege.run(cfg);
+      outcome = r.outcome === 'win' ? 'win' : 'loss';
+      sent = r.atk.sent; left = r.atk.left; defLost = r.def.lost;
+      for (const t in defLost) war.garrison[t] = Math.max(0, (war.garrison[t] || 0) - defLost[t]);
+      rep = { cfg, r };
+    } else {
+      const res = CH.World.clash(atkArmy, 1 + 0.04 * (m.heroLevel || 1), war.garrison, 1.35, defKey === 'guard' ? 5000 : 2000);
+      outcome = res.win ? 'win' : 'loss';
+      for (const t in atkArmy) left[t] = Math.floor(atkArmy[t] * (1 - res.atkLoss));
+      for (const t in war.garrison) { const n = Math.floor(war.garrison[t] * res.defLoss); defLost[t] = n; war.garrison[t] -= n; }
+      if (res.win) war.garrison = {};
+    }
+    addKills(s, key, sum(defLost));
+    if (defKey !== 'guard') addKills(s, defKey, sum(sent) - sum(left));
+    const split = splitSurvivors(m, sent, left);
+    if (outcome === 'win') {
+      // The old holder's surviving garrison (if any) goes home; the attackers move in.
+      releaseGarrison(s, T);
+      const garrison = {}; for (const t in left) if (left[t]) garrison[t] = left[t];
+      setHolder(s, key, garrison, sharesOf(m, split), T);
+      for (const x of split.allies) { const k = w.kingdoms.find(o => o.id === x.id); if (k) k.out = false; }
+      if (owner) owner.out = false;
+      th.burn = T + 3 * MIN;
+      w.news.unshift({ t: T, text: '🔥 ' + keyName(s, key) + (m.rally ? ' (rally of ' + ((m.allies || []).length + 1) + ')' : '') + ' seized the ' + TH.name + '!', kind: 'war' });
+    } else {
+      returnAllies(split); goHome(split.own);
+      th.smoke = T + 2 * MIN;
+    }
+    if (rep) {
+      const playerAtk = key === 'player';
+      const r = CH.World.addReport(s, {
+        t: T, kind: playerAtk ? 'attack' : 'defense', you: playerAtk ? 'atk' : 'def', outcome: playerAtk ? (outcome === 'win' ? 'win' : 'loss') : (outcome === 'win' ? 'loss' : 'win'),
+        title: playerAtk ? (outcome === 'win' ? '👑 You seized the ' + TH.name + '!' : 'Repelled at the ' + TH.name) : (outcome === 'win' ? keyName(s, key) + ' took the ' + TH.name + ' from you' : 'You held the ' + TH.name + ' against ' + keyName(s, key)),
+        atk: { name: keyName(s, key), sent: rep.r.atk.sent, lost: rep.r.atk.lost, hero: m.hero, helpers: m.rally ? (m.allies || []).length : 0 }, def: { name: keyName(s, defKey), sent: rep.r.def.sent, lost: rep.r.def.lost },
+        destruction: rep.r.destruction, dmg: rep.r.dmg, time: Math.round(rep.r.time), replay: rep.cfg, coords: [th.x, th.y],
+      });
+      if (playerAtk) { const lost = {}; for (const t in m.army) { const n = m.army[t] - (split.own[t] || 0); if (n > 0) lost[t] = Math.floor(n * 0.5); } r.casualties = CH.State.addCasualties(s, lost); }
+      ev.push({ kind: 'report', report: r, alert: !playerAtk });
+    }
+  }
+
+  /* ---------------- Player rallies ---------------- */
+  /** Picks up to 9 faction allies near you; each lends 40% of its troops. */
+  function rallyAllies(s, target) {
+    const w = W(s);
+    if (s.faction == null) return [];
+    return w.kingdoms.filter(k => k.f === s.faction && !k.out && armyCount(k.tr) > 50)
+      .sort((a, b) => Math.hypot(a.x - w.px, a.y - w.py) - Math.hypot(b.x - w.px, b.y - w.py)).slice(0, TH.rallyMax - 1)
+      .map(k => { const a = {}; for (const t in k.tr) { const n = Math.floor(k.tr[t] * 0.4); if (n) a[t] = n; } return { k, army: a }; });
+  }
+
+  /* ---------------- Leaderboards ---------------- */
+  function leaderboards(s) {
+    const w = W(s);
+    const rows = w.kingdoms.map(k => ({ key: k.id, name: k.name, f: k.f, power: CH.World.power(k), kills: k.kills || 0 }));
+    rows.push({ key: 'player', name: s.player.name, f: s.faction, power: CH.State.power(s), kills: s.stats.kills || 0, me: true });
+    const power = rows.slice().sort((a, b) => b.power - a.power);
+    const kills = rows.slice().sort((a, b) => b.kills - a.kills);
+    const factions = CH.FACTIONS.map(f => { const m = rows.filter(r => r.f === f.id); return { f, members: m.length, power: m.reduce((a, r) => a + r.power, 0), kills: m.reduce((a, r) => a + r.kills, 0) }; }).sort((a, b) => b.power - a.power);
+    return { power, kills, factions };
+  }
+
+  return { warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
 })();
 
 </script>
@@ -4480,7 +4897,12 @@ CH.Art = (function () {
     if (o.ghost) c.globalAlpha = 0.65;
     if (d.cat === 'wall') wall(c, x, y, L, o.links || 0, b.type === 'gate', time);
     else if (d.cat === 'trap') { if (!o.hidden) trap(c, x, y, b.type, L, o.armed !== false); }
-    else if (BLD[b.type]) BLD[b.type](c, x, y, s, L, d, time, o);
+    else if (BLD[b.type]) {
+      if (o.skin && o.skin !== 'classic' && CH.SKINS[o.skin]) skinned(c, o.skin, x - 12, y - 56, s + 24, s + 64, cc => BLD[b.type](cc, x, y, s, L, d, time, o), time, x + s / 2, y + s / 2 - 12, s * 0.7);
+      else BLD[b.type](c, x, y, s, L, d, time, o);
+      if (o.burning) fireFx(c, x + s / 2, y + s * 0.55, s * 0.32, time);
+      else if (o.smoking) smokeFx(c, x + s / 2, y + s * 0.2, s * 0.3, time);
+    }
     if (o.constructing) {
       c.globalAlpha = 0.85;
       c.strokeStyle = '#c8a060'; c.lineWidth = 2;
@@ -4659,6 +5081,55 @@ CH.Art = (function () {
     if (big) glow(c, s * 1.85, -s * 1.75, s * 0.5, '255,140,40', 0.4 + 0.3 * Math.abs(f));
   }
 
+  /* ---------------- Skins & world effects ---------------- */
+  let skinCv = null;
+  /** Draws `draw` recoloured with a skin theme, then adds its aura and particles. */
+  function skinned(c, id, bx, by, bw, bh, draw, time, cx, cy, r) {
+    const sk = CH.SKINS[id], K = 2.5;
+    if (!skinCv) skinCv = document.createElement('canvas');
+    const w = Math.ceil(bw * K), h = Math.ceil(bh * K);
+    if (skinCv.width < w || skinCv.height < h) { skinCv.width = Math.max(w, skinCv.width); skinCv.height = Math.max(h, skinCv.height); }
+    const o = skinCv.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, skinCv.width, skinCv.height);
+    o.setTransform(K, 0, 0, K, -bx * K, -by * K);
+    draw(o);
+    o.globalCompositeOperation = 'source-atop'; o.fillStyle = sk.tint; o.fillRect(bx, by, bw, bh); o.globalCompositeOperation = 'source-over';
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(c, cx, cy, r * 1.25, sk.aura, 0.22 + Math.sin(time * 2) * 0.05); c.restore();
+    c.drawImage(skinCv, 0, 0, w, h, bx, by, bw, bh);
+    skinParticles(c, sk.fx, cx, cy, r, time);
+  }
+  function skinParticles(c, fx, cx, cy, r, time) {
+    for (let i = 0; i < 7; i++) {
+      const ph = (time * 0.35 + i / 7) % 1, a = i * 2.39;
+      const x = cx + Math.cos(a) * r * (0.4 + 0.5 * ((i * 37) % 10) / 10), y = cy + r * 0.6 - ph * r * 1.8;
+      c.globalAlpha = Math.sin(ph * Math.PI) * 0.9;
+      if (fx === 'light') { circle(c, x, y, 1.6, '#fff6c8'); circle(c, x, y, 3.5, 'rgba(255,240,170,0.35)'); }
+      else if (fx === 'ember') circle(c, x, y, 1.5 + (i % 2), i % 2 ? '#ffb347' : '#ff5a1f');
+      else if (fx === 'shadow') circle(c, x + Math.sin(time * 3 + i) * 3, y, 3 + (i % 3), 'rgba(120,60,200,0.45)');
+      else if (fx === 'leaf') { const ly = cy - r + ph * r * 1.8; ell(c, x + Math.sin(time * 2 + i) * 4, ly, 2.6, 1.4, i % 2 ? '#6fbf4a' : '#a8d85a'); }
+    }
+    c.globalAlpha = 1;
+  }
+  /** Burning: the castle was defeated. */
+  function fireFx(c, x, y, r, time) {
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(c, x, y, r * 1.6, '255,110,30', 0.35 + Math.sin(time * 9) * 0.06); c.restore();
+    for (let i = 0; i < 6; i++) {
+      const fx = x + (i - 2.5) * r * 0.32, f = Math.sin(time * 11 + i * 1.7), h = r * (0.7 + 0.35 * f + (i % 2) * 0.3);
+      poly(c, [fx - r * 0.18, y, fx + Math.sin(time * 7 + i) * r * 0.08, y - h, fx + r * 0.18, y], i % 2 ? '#ff7a1a' : '#ffb02e');
+      poly(c, [fx - r * 0.08, y, fx, y - h * 0.55, fx + r * 0.08, y], '#fff1a0');
+    }
+    smokeFx(c, x, y - r * 0.8, r * 0.9, time, 0.55);
+  }
+  /** Smoking: the castle survived an attack. */
+  function smokeFx(c, x, y, r, time, alpha = 0.45) {
+    for (let i = 0; i < 6; i++) {
+      const ph = (time * 0.25 + i / 6) % 1;
+      c.globalAlpha = (1 - ph) * alpha;
+      circle(c, x + Math.sin(i * 2 + time) * r * 0.3 + ph * r * 0.4, y - ph * r * 2.2, r * (0.3 + ph * 0.6), i % 2 ? '#6a6a70' : '#8a8a90');
+    }
+    c.globalAlpha = 1;
+  }
+
   /** Draw a battle unit. `mine` = belongs to the player (blue ring) vs hostile (red ring). */
   function drawUnit(c, u, mine, time) {
     const s = u.size;
@@ -4671,7 +5142,9 @@ CH.Art = (function () {
     if (u.rageT > 0) glow(c, 0, -s, s * 1.6, '255,60,120', 0.35);
     c.translate(0, lift);
     c.save(); c.scale(u.facing, 1);
-    (UNIT[u.def.sprite] || UNIT.swordsman)(c, s, u.anim, { swing: u.swing > 0 ? u.swing : 0, friendly: mine });
+    const paint = cc => (UNIT[u.def.sprite] || UNIT.swordsman)(cc, s, u.anim, { swing: u.swing > 0 ? u.swing : 0, friendly: mine });
+    if (u.skin && u.skin !== 'classic' && CH.SKINS[u.skin]) skinned(c, u.skin, -s * 2.6, -s * 3.6, s * 5.2, s * 4.4, paint, time, 0, -s, s * 1.4);
+    else paint(c);
     c.restore();
     if (u.hit > 0) { c.globalCompositeOperation = 'lighter'; glow(c, 0, -s, s * 1.3, '255,255,255', 0.45); c.globalCompositeOperation = 'source-over'; }
     if (u.slowT > 0) { c.beginPath(); c.ellipse(0, -1, s * 0.9, s * 0.3, 0, 0, TAU); c.strokeStyle = 'rgba(140,210,255,0.9)'; c.lineWidth = 2; c.stroke(); }
@@ -4711,7 +5184,7 @@ CH.Art = (function () {
     drawBuilding(ctx, { type, level, tx: 0, ty: 0 }, { time: 1, links: CH.BUILDINGS[type].cat === 'wall' ? 5 : 0, fill: 0.7 });
   }
 
-  return { drawBuilding, drawUnit, unitIcon, buildingIcon, glow, circle, ell, rect, poly, line, rrect, tierOf };
+  return { drawBuilding, drawUnit, unitIcon, buildingIcon, glow, circle, ell, rect, poly, line, rrect, tierOf, skinned, skinParticles, fireFx, smokeFx };
 })();
 
 </script>
@@ -4937,7 +5410,9 @@ CH.View = (function () {
       if (ui.moving && ui.moving.id === b.id) continue;
       const d = CH.BUILDINGS[b.type];
       const fill = d.cat === 'storage' ? Math.min(1, save.res[d.res] / CH.State.capacity(save, d.res)) : null;
-      A.drawBuilding(c, b, { time, links: links.get(b) || 0, constructing: !!b.job && b.job.kind !== 'clear', fill, angle: -0.6 + Math.sin(time * 0.5 + b.id) * 0.4 });
+      const isCastle = b.type === 'castle', wNow = Date.now();
+      A.drawBuilding(c, b, { time, links: links.get(b) || 0, constructing: !!b.job && b.job.kind !== 'clear', fill, angle: -0.6 + Math.sin(time * 0.5 + b.id) * 0.4,
+        skin: isCastle && save.equipped ? save.equipped.castle : null, burning: isCastle && save.world && save.world.pburn > wNow, smoking: isCastle && save.world && save.world.psmoke > wNow });
     }
     // overlays: timers, collect bubbles
     for (const b of save.buildings) {
@@ -5013,7 +5488,7 @@ CH.View = (function () {
           if (bd.def.cat === 'trap') { A.ell(c, bd.cx, bd.cy, 9, 5, 'rgba(30,20,10,0.5)'); continue; }
           rubble(c, bd); continue;
         }
-        A.drawBuilding(c, bd, { time, links: links.get(bd) || 0, angle: bd.angle, anim: bd.anim > 0 ? bd.anim / 0.2 : 0, hidden: bd.hidden, armed: bd.armed, frozen: bd.frozen > 0, hit: bd.hit > 0, fill: 0.7 });
+        A.drawBuilding(c, bd, { time, skin: bd.type === 'castle' ? b.castleSkin : null, links: links.get(bd) || 0, angle: bd.angle, anim: bd.anim > 0 ? bd.anim / 0.2 : 0, hidden: bd.hidden, armed: bd.armed, frozen: bd.frozen > 0, hit: bd.hit > 0, fill: 0.7 });
         if (bd.hp < bd.maxHp && bd.def.cat !== 'trap') hpBar(c, bd.x + 4, bd.y - 6, bd.size * T - 8, bd.hp / bd.maxHp, b.mode === 'raid' ? '#e86a4a' : '#6fd36a');
         if (ui.selectedB === bd) rangeRing(c, bd.cx, bd.cy, bd.atk ? bd.atk.range : 0, bd.atk ? bd.atk.min : 0);
       } else A.drawUnit(c, e.u, e.u.side === b.playerSide, time);
@@ -5186,9 +5661,10 @@ CH.WorldView = (function () {
       if (f.res) for (const t of w.tiles) if (vis(t)) this.resTile(c, t);
       if (f.mon) { for (const m of w.camps) if (vis(m) && !m.dead) this.camp(c, m); for (const r of w.ruins) if (vis(r) && !r.dead) this.ruin(c, r); if (w.dragon) this.dragonIcon(c, w.dragon, now); }
       for (const fo of w.forts) if (vis(fo)) this.fort(c, fo);
+      if (w.throne) this.citadel(c, w.throne, now, s);
       const pPow = CH.State.power(s);
       if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) this.kingdom(c, k2, now, false);
-      this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name }, now, true);
+      this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name, burn: w.pburn, smoke: w.psmoke, skin: s.equipped && s.equipped.castle }, now, true);
       // Marches
       for (const m of w.marches) {
         const mine = m.owner === 'player', hostile = m.target && m.target.type === 'player';
@@ -5218,25 +5694,57 @@ CH.WorldView = (function () {
         const label = (x, y, txt, col, dy) => { const p = this.toScreen((x + 0.5) * TW, (y + 0.5) * TW + dy); c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.75)'; c.strokeText(txt, p.x, p.y); c.fillStyle = col; c.fillText(txt, p.x, p.y); };
         if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) label(k2.x, k2.y, k2.name + ' · ' + CH.util.fmt(CH.World.power(k2)), k2.sh > now ? '#9fd4ff' : CH.FACTIONS[k2.f].color, 34);
         label(w.px, w.py, '★ ' + s.player.name, '#ffe08a', 36);
+        if (w.throne) { const th = w.throne, war = th.war && !th.war.ended && now < th.war.end ? th.war : null;
+          label(th.x, th.y, '👑 ' + CH.THRONE.name, '#ffe9a8', 92);
+          label(th.x, th.y, war ? '⚔ Held by ' + CH.Throne.keyName(s, war.holder) : th.king ? 'King: ' + th.king.name : 'No king', war ? '#ff9a8a' : '#e8f0ff', 108); }
         if (z > 0.6 && f.mon) for (const m of w.camps) if (vis(m) && !m.dead) label(m.x, m.y, 'Lv ' + m.lvl, '#ffb3a8', 24);
         if (z > 0.6 && f.res) for (const t of w.tiles) if (vis(t)) label(t.x, t.y, 'Lv ' + t.lvl, '#e8f2d8', 22);
       }
+    }
+    /** The Aurelion Citadel: the Throne of Eldoria. */
+    citadel(c, th, now, s) {
+      const x = (th.x + 0.5) * TW, y = (th.y + 0.5) * TW, t = now / 1000;
+      const war = th.war && !th.war.ended && now < th.war.end;
+      c.save(); c.translate(x, y);
+      c.globalCompositeOperation = 'lighter'; A.glow(c, 0, -30, 150, war ? '255,90,60' : '255,220,140', 0.28 + Math.sin(t * 1.5) * 0.06); c.globalCompositeOperation = 'source-over';
+      A.ell(c, 0, 40, 130, 34, 'rgba(0,0,0,0.35)');
+      A.ell(c, 0, 34, 120, 30, '#c9bfa8'); A.ell(c, 0, 26, 104, 25, '#e2dac6'); A.ell(c, 0, 20, 88, 21, '#f2ecdc');
+      A.rect(c, -78, -16, 156, 38, '#eee6d2'); for (let i = -78; i < 78; i += 12) A.rect(c, i, -22, 7, 6, '#eee6d2');
+      for (const dx of [-80, -40, 40, 80]) { A.rect(c, dx - 10, -50, 20, 72, '#f6f0e2'); A.poly(c, [dx - 13, -50, dx, -76, dx + 13, -50], '#d4a843'); A.circle(c, dx, -78, 3, '#ffe08a'); }
+      A.rect(c, -24, -90, 48, 112, '#fbf7ec'); A.poly(c, [-28, -90, 0, -150, 28, -90], '#e8c25a', 'rgba(120,80,10,0.6)', 2);
+      A.rect(c, -9, -6, 18, 28, '#3a2614'); A.circle(c, 0, -6, 9, '#3a2614');
+      for (const dy of [-70, -45]) A.rect(c, -6, dy, 12, 14, '#7ab8ff');
+      const cy = -168 + Math.sin(t * 2) * 5;
+      A.poly(c, [-18, cy + 10, -18, cy - 6, -9, cy + 2, 0, cy - 12, 9, cy + 2, 18, cy - 6, 18, cy + 10], '#ffd34a', '#8a5a10', 2);
+      for (const dx of [-18, 0, 18]) A.circle(c, dx, cy - (dx ? 7 : 13), 3, '#ff5a5a');
+      const hk = war ? th.war.holder : th.king ? th.king.key : null;
+      const col = hk === 'player' ? '#5fb0ff' : hk && hk !== 'guard' ? (CH.FACTIONS[(s.world.kingdoms.find(k => k.id === hk) || {}).f] || { color: '#bbb' }).color : '#f2ecdc';
+      for (const dx of [-80, 80]) { A.line(c, dx, -78, dx, -104, '#5a3a1a', 2); A.poly(c, [dx, -104, dx + 22, -98 + Math.sin(t * 4 + dx) * 2, dx, -90], col); }
+      if (war) { c.beginPath(); c.arc(0, 0, 150 + Math.sin(t * 4) * 6, 0, 6.283); c.strokeStyle = 'rgba(255,80,60,0.7)'; c.lineWidth = 4; c.setLineDash([16, 10]); c.lineDashOffset = -t * 30; c.stroke(); c.setLineDash([]); }
+      if (th.burn > now) { A.fireFx(c, -40, 10, 30, t); A.fireFx(c, 40, 10, 30, t + 1); A.fireFx(c, 0, -40, 34, t + 2); }
+      else if (th.smoke > now) { A.smokeFx(c, -30, -60, 26, t); A.smokeFx(c, 30, -50, 26, t + 1.5); }
+      c.restore();
     }
     passDiff(d, p, mine) { if (!d || d === 'all') return true; const r = p / Math.max(1, mine); return d === 'weak' ? r < 0.8 : d === 'even' ? r >= 0.8 && r <= 1.25 : r > 1.25; }
 
     kingdom(c, k, now, mine) {
       const x = (k.x + 0.5) * TW, y = (k.y + 0.5) * TW, sc = 0.7 + k.cl * 0.07;
-      const roof = mine ? '#3a62c9' : k.f != null ? CH.FACTIONS[k.f].color : '#888';
+      const sk = k.skin && k.skin !== 'classic' ? CH.SKINS[k.skin] : null;
+      const roof = sk ? sk.roof : mine ? '#3a62c9' : k.f != null ? CH.FACTIONS[k.f].color : '#888';
+      if (sk) { c.save(); c.globalCompositeOperation = 'lighter'; A.glow(c, x, y - 8 * sc, 46 * sc, sk.aura, 0.3); c.restore(); }
       c.save(); c.translate(x, y); c.scale(sc, sc);
       A.ell(c, 0, 14, 30, 9, 'rgba(0,0,0,0.3)');
       if (mine) { c.beginPath(); c.arc(0, 0, 34, 0, 6.283); c.strokeStyle = '#ffe08a'; c.lineWidth = 3; c.stroke(); }
-      const st = k.cl >= 6 ? '#d9d4c8' : k.cl >= 3 ? '#a9a6a0' : '#9b8f7a';
+      const st = sk ? sk.wall : k.cl >= 6 ? '#d9d4c8' : k.cl >= 3 ? '#a9a6a0' : '#9b8f7a';
       A.rect(c, -18, -10, 36, 22, st); for (let i = -18; i < 18; i += 7) A.rect(c, i, -14, 4, 4, st);
       for (const dx of [-18, 18]) { A.rect(c, dx - 6, -22, 12, 34, st); A.poly(c, [dx - 8, -22, dx, -34, dx + 8, -22], roof); }
       A.rect(c, -7, -26, 14, 18, st); A.poly(c, [-9, -26, 0, -42, 9, -26], roof);
       A.rect(c, -4, 3, 8, 9, '#2a1d12');
       A.circle(c, 0, -46, 7, 'rgba(10,14,30,0.85)'); c.font = '900 9px system-ui'; c.textAlign = 'center'; c.fillStyle = '#ffe08a'; c.fillText(k.cl, 0, -43);
       if (k.sh > now) { c.beginPath(); c.arc(0, -6, 30, 0, 6.283); c.fillStyle = 'rgba(120,190,255,0.18)'; c.fill(); c.strokeStyle = 'rgba(160,215,255,0.8)'; c.lineWidth = 2; c.stroke(); }
+      if (sk) A.skinParticles(c, sk.fx, 0, -14, 26, now / 1000);
+      if (k.burn > now) { A.fireFx(c, -12, 10, 24, now / 1000); A.fireFx(c, 14, 4, 20, now / 1000 + 1.3); }
+      else if (k.smoke > now) A.smokeFx(c, 0, -26, 22, now / 1000, 0.6);
       c.restore();
     }
     resTile(c, t) {
@@ -5444,6 +5952,7 @@ CH.Home = (function () {
       '<button class="icon-btn mail-btn" id="hud-mail" aria-label="Reports">✉<b id="hud-unread"></b></button>' +
       '<button class="icon-btn" id="hud-settings" aria-label="Settings">' + UI.icon('gear') + '</button>';
     $('alert').onclick = () => { CH.Audio.play('click'); CH.WorldUI.incomingModal(); };
+    $('warbar').onclick = () => { CH.Audio.play('click'); const th = CH.App.save.world.throne; CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
     $('hud').onclick = e => {
       if (e.target.closest('#hud-player')) UI.sheet('profile');
       else if (e.target.closest('#hud-settings')) UI.sheet('settings');
@@ -5482,7 +5991,7 @@ CH.Home = (function () {
   }
   function moreMenu() {
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
+      [['ranks', 'crown', 'Leaderboards'], ['skins', 'shield', 'Skins'], ['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['redeem', 'gems', 'Redeem code'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
     { onClick: e => { const b = e.target.closest('[data-more]'); if (b) { UI.closeModal(); UI.sheet(b.dataset.more); } } });
@@ -5507,6 +6016,7 @@ CH.Home = (function () {
     }
     setText('hud-gems', U.fmt(s.res.gems)); setText('hud-runes', U.fmt(s.res.runes));
     setText('hud-unread', s.unread ? String(s.unread) : '');
+    CH.WorldUI.warBanner();
     // Incoming attack banner
     const inc = s.world ? CH.World.incoming(s) : [];
     const ab = $('alert');
@@ -6079,6 +6589,66 @@ CH.Screens = (function () {
     };
   }
 
+  /* ---------------- Leaderboards ---------------- */
+  function ranks(tab) {
+    const s = save(), lb = CH.Throne.leaderboards(s), th = s.world.throne, now = Date.now();
+    tab = tab || ranks.tab || 'power'; ranks.tab = tab;
+    const fc = f => f != null ? '<span style="color:' + CH.FACTIONS[f].color + '">' + CH.FACTIONS[f].name + '</span>' : '<span class="muted">No faction</span>';
+    const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    const list = (rows, val) => {
+      const me = rows.findIndex(r => r.me);
+      const top = rows.slice(0, 20).map((r, i) => '<div class="rank-row' + (r.me ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(r.name) + '</b><span class="muted">' + fc(r.f) + '</span><span class="rv">' + val(r) + '</span></div>').join('');
+      return top + (me >= 20 ? '<div class="rank-row me"><span class="rk">' + (me + 1) + '.</span><b>' + esc(rows[me].name) + '</b><span class="muted">' + fc(rows[me].f) + '</span><span class="rv">' + val(rows[me]) + '</span></div>' : '');
+    };
+    let html;
+    if (tab === 'power') html = list(lb.power, r => U.fmt(r.power));
+    else if (tab === 'kills') html = list(lb.kills, r => U.fmt(r.kills) + ' ☠');
+    else if (tab === 'factions') html = lb.factions.map((x, i) => '<div class="rank-row' + (x.f.id === s.faction ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b style="color:' + x.f.color + '">' + x.f.name + '</b><span class="muted">' + x.members + ' castles · ' + U.fmt(x.kills) + ' kills</span><span class="rv">' + U.fmt(x.power) + '</span></div>').join('');
+    else {
+      const war = th.war, live = war && !war.ended && now < war.end;
+      const hold = war ? Object.entries(war.hold).map(([k, ms]) => [k, ms + (live && war.holder === k ? now - war.holdStart : 0)]) : [];
+      if (live && war.holder !== 'guard' && !war.hold[war.holder]) hold.push([war.holder, now - war.holdStart]);
+      hold.sort((a, b) => b[1] - a[1]);
+      const kills = war ? Object.entries(war.kills).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
+      html = '<div class="panel ev-now"><span class="kicker">' + CH.THRONE.title + '</span><h3>' + (th.king ? '👑 ' + esc(th.king.name) : 'No king') + '</h3>' + (th.king ? '<p class="muted">Reigns until ' + new Date(th.king.until).toLocaleString() + ' · held the throne ' + U.time(th.king.held / 1000) + '</p>' : '') +
+        '<p>' + (live ? '<b class="warn">Throne War live · ' + U.time((war.end - now) / 1000) + ' left</b>' : 'Next Throne War: ' + new Date(CH.Throne.warWindow(now).next).toLocaleString()) + '</p></div>' +
+        (war ? '<h4 class="group">' + (live ? 'Hold time (live)' : 'Last war: hold time') + '</h4>' + (hold.map(([k, ms], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.time(ms / 1000) + '</span></div>').join('') || '<p class="muted">Nobody has taken the Citadel yet.</p>') +
+          '<h4 class="group">Top killers of the war</h4>' + kills.map(([k, n], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.fmt(n) + ' ☠</span></div>').join('') : '') +
+        (th.history.length ? '<h4 class="group">Past kings</h4><ul class="news">' + th.history.map(h => '<li>' + new Date(h.t).toLocaleDateString() + ' · ' + esc(h.name) + ' (' + U.time(h.held / 1000) + ')</li>').join('') + '</ul>' : '');
+    }
+    return {
+      title: 'Leaderboards',
+      html: '<div class="tabs">' + [['power', 'Power'], ['factions', 'Factions'], ['kills', 'Killers'], ['throne', '👑 Throne']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '</div><div class="ranks">' + html + '</div>',
+      on: { tab: b => UI.sheet('ranks', b.dataset.t, false) },
+    };
+  }
+
+  /* ---------------- Skins (wardrobe) ---------------- */
+  function skins(tab) {
+    const s = save(); tab = tab || skins.tab || 'castle'; skins.tab = tab;
+    const paintCastle = id => { const key = 'skinC' + id; UI.painters[key] = cv => { const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); c.translate(cv.width / 2 - 48 * 1.1, 70); c.scale(1.1, 1.1); CH.Art.drawBuilding(c, { type: 'castle', level: 6, tx: 0, ty: 0 }, { time: 1.3, skin: id }); }; return '<canvas class="skin-prev" width="200" height="190" data-paint="' + key + '"></canvas>'; };
+    const paintHero = (h, id) => { const key = 'skinH' + h + id; UI.painters[key] = cv => { const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); const d = CH.HEROES[h]; CH.Art.drawUnit(c, { x: cv.width / 2, y: cv.height - 14, size: d.size * 2.4, def: d, anim: 0.4, swing: 0, facing: 1, hp: 1, maxHp: 1, skin: id }, true, 1.3); }; return '<canvas class="skin-prev hero" width="110" height="120" data-paint="' + key + '"></canvas>'; };
+    const btn = (kind, id, hero) => {
+      const own = S.ownsSkin(s, kind, id, hero), on = kind === 'castle' ? s.equipped.castle === id : S.heroSkin(s, hero) === id;
+      return on ? '<span class="good">Equipped</span>' : own ? '<button class="btn" data-act="equip" data-k="' + kind + '" data-id="' + id + '" data-h="' + (hero || '') + '">Equip</button>'
+        : '<button class="btn btn-gem" data-act="buy" data-k="' + kind + '" data-id="' + id + '" data-h="' + (hero || '') + '"' + (s.res.gems >= CH.SKINS[id][kind] ? '' : ' disabled') + '>' + icon('gems') + CH.SKINS[id][kind] + '</button>';
+    };
+    let html;
+    if (tab === 'castle') html = '<div class="k-grid">' + CH.SKIN_ORDER.map(id => '<div class="panel skin-card">' + paintCastle(id) + '<b>' + CH.SKINS[id].name + '</b><span class="muted">' + CH.SKINS[id].theme + '</span>' + btn('castle', id) + '</div>').join('') + '</div>';
+    else html = CH.HERO_ORDER.map(h => '<div class="panel skin-hero"><h3>' + CH.HEROES[h].name + (s.heroes[h].unlocked ? '' : ' <span class="muted">(not recruited yet)</span>') + '</h3><div class="skin-row">' +
+      CH.SKIN_ORDER.map(id => '<div class="skin-mini">' + paintHero(h, id) + '<span>' + CH.SKINS[id].name + '</span>' + btn('hero', id, h) + '</div>').join('') + '</div></div>').join('');
+    return {
+      title: 'Skins',
+      html: '<div class="tabs"><button class="tab' + (tab === 'castle' ? ' on' : '') + '" data-act="tab" data-t="castle">Castle</button><button class="tab' + (tab === 'hero' ? ' on' : '') + '" data-act="tab" data-t="hero">Heroes</button><span class="muted">' + icon('gems') + U.fmt(s.res.gems) + ' gems</span></div>' +
+        '<p class="lead">Four themes: Dunia (Verdant), Surgawi (Celestial), Neraka (Infernal) and Kegelapan (Abyssal). Castle skins show in your kingdom, on the world map and in battles; hero skins show wherever your heroes fight. Skins are cosmetic.</p>' + html,
+      on: {
+        tab: b => UI.sheet('skins', b.dataset.t, false),
+        buy: b => { const r = S.buySkin(s, b.dataset.k, b.dataset.id, b.dataset.h || null); if (!r.ok) return fail(r); CH.Audio.play('victory'); persist(); UI.toast(CH.SKINS[b.dataset.id].name + ' unlocked and equipped!', 'good'); UI.refreshSheet(); },
+        equip: b => { S.equipSkin(s, b.dataset.k, b.dataset.id, b.dataset.h || null); CH.Audio.play('click'); persist(); UI.refreshSheet(); },
+      },
+    };
+  }
+
   /* ---------------- Gem shop ---------------- */
   function store() {
     const s = save(), G = CH.GEM_SHOP, R = ['gold', 'wood', 'stone', 'food'];
@@ -6090,9 +6660,14 @@ CH.Screens = (function () {
       title: 'Gem Shop',
       html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
         '<h4 class="group">Resources</h4><p class="muted">Bought resources are added straight to your kingdom and can go above your storage limit.</p><div class="k-grid">' + resCards + '</div>' +
+        '<h4 class="group">Marches</h4><div class="b-row">' + icon('swords', 'big-ico') + '<div class="b-info"><b>Extra march slot</b><span class="muted">You have ' + S.marchSlots(s) + ' of ' + CH.MAX_MARCHES + ' marches (' + S.baseMarchSlots(s) + ' from your castle + ' + (s.extraMarch || 0) + ' bought). Permanent.</span></div>' +
+          (S.marchSlots(s) >= CH.MAX_MARCHES ? '<span class="maxed">Max</span>' : '<button class="btn btn-gem" data-act="march"' + (s.res.gems >= CH.GEM_SHOP.marchSlot(s.extraMarch || 0) ? '' : ' disabled') + '>' + icon('gems') + CH.GEM_SHOP.marchSlot(s.extraMarch || 0) + '</button>') + '</div>' +
+        '<h4 class="group">Skins</h4><div class="b-row">' + icon('shield', 'big-ico') + '<div class="b-info"><b>Castle & hero skins</b><span class="muted">Dunia, Surgawi, Neraka, Kegelapan</span></div><button class="btn btn-gold" data-act="skins">Open wardrobe</button></div>' +
         '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
       on: {
         res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
+        march: () => { const r = S.buyMarchSlot(s); if (!r.ok) return fail(r); CH.Audio.play('horn'); persist(); UI.toast('New march slot! You now have ' + S.marchSlots(s) + ' marches.', 'good'); UI.refreshSheet(); },
+        skins: () => UI.sheet('skins'),
       },
     };
     function doBuy(kind, a, i) {
@@ -6226,7 +6801,7 @@ CH.Screens = (function () {
   function redeem() {
     const s = save();
     const got = (CH.REDEEM_CODES || []).filter(c => s.redeemed.includes(c.hash));
-    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '');
+    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '') + (rw.skins ? rw.skins.map(k => { const [kind, id, h] = String(k).split(':'); return '<span class="chip">Skin: ' + (CH.SKINS[id] ? CH.SKINS[id].name : id) + (h && CH.HEROES[h] ? ' (' + CH.HEROES[h].name + ')' : kind === 'castle' ? ' (castle)' : '') + '</span>'; }).join('') : '');
     return {
       title: 'Redeem code',
       html: '<div class="redeem panel"><label class="label" for="rcode">Enter a gift code</label>' +
@@ -6285,7 +6860,7 @@ CH.Screens = (function () {
     };
   }
 
-  return { store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
+  return { ranks, skins, store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
 })();
 
 </script>
@@ -6591,6 +7166,7 @@ CH.WorldUI = (function () {
     let best = null, bd = 1.1;
     const consider = (type, o) => { const dd = d(o); if (dd < bd) { bd = dd; best = { type, o }; } };
     consider('home', { x: w.px, y: w.py });
+    if (w.throne && Math.hypot(w.throne.x + 0.5 - x, w.throne.y + 0.5 - y) < 2.6) { best = { type: 'throne', o: w.throne }; bd = 0.5; }
     for (const k of w.kingdoms) consider('kingdom', k);
     if (st.filters.mon) { for (const c of w.camps) if (!c.dead) consider('camp', c); for (const r of w.ruins) if (!r.dead) consider('ruin', r); if (w.dragon) consider('dragon', w.dragon); }
     if (st.filters.res) for (const t of w.tiles) consider('tile', t);
@@ -6646,6 +7222,21 @@ CH.WorldUI = (function () {
       head = '<h3>' + (o.owner ? esc(o.ownerName) + '\'s fort' : 'Abandoned Fort') + ' <span class="lv">Level ' + o.lvl + '</span></h3>';
       body = '<p>Holding a fort gives <b>+6% production</b> of every resource (doubled during Castle Siege). Expansionist kingdoms will try to take it from you.</p>';
       acts = o.owner === 'player' ? '<p class="good">You hold this fort.</p>' : '<button class="btn btn-gold" data-p="attack">' + icon('swords') + 'Capture</button>';
+    } else if (h.type === 'throne') {
+      const TH = CH.THRONE, win = CH.Throne.warWindow(now), war = o.war && !o.war.ended && now < o.war.end ? o.war : null;
+      head = '<h3>👑 ' + TH.name + '</h3><p class="muted">The Throne of Eldoria</p>';
+      const board = war ? Object.entries(war.hold).map(([k, ms]) => [k, ms + (war.holder === k ? now - war.holdStart : 0)]).concat(war.holder !== 'guard' && !war.hold[war.holder] ? [[war.holder, now - war.holdStart]] : []).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
+      body = '<dl class="stats">' +
+        '<div><dt>' + TH.title + '</dt><dd>' + (o.king ? esc(o.king.name) + (o.king.key === 'player' ? ' (you!)' : '') : 'None') + '</dd></div>' +
+        (o.king ? '<div><dt>Reign ends</dt><dd>' + U.time((o.king.until - now) / 1000) + '</dd></div>' : '') +
+        '<div><dt>Throne War</dt><dd>' + (war ? '<span class="warn">LIVE · ' + U.time((war.end - now) / 1000) + ' left</span>' : 'Saturday ' + TH.warHour + ':00 · in ' + U.time((win.next - now) / 1000)) + '</dd></div>' +
+        (war ? '<div><dt>Held by</dt><dd>' + esc(CH.Throne.keyName(s, war.holder)) + '</dd></div>' : '') + '</dl>' +
+        (war ? '<p class="muted">Longest hold so far:</p><ol class="news">' + (board.map(([k, ms]) => '<li>' + esc(CH.Throne.keyName(s, k)) + ' · ' + U.time(ms / 1000) + '</li>').join('') || '<li>Nobody yet: the Guardians hold it.</li>') + '</ol>' :
+          '<p class="muted">Every Saturday at ' + TH.warHour + ':00 the Citadel opens for ' + TH.warMinutes + ' minutes. Whoever holds it longest in total becomes ' + TH.title + ' for a week and hands out the treasure inside. Factions can rally up to ' + TH.rallyMax + ' castles.</p>') +
+        '<p class="muted">Treasure: 1 Royal Treasure, 3 Noble Chests, 6 Knight Chests.</p>';
+      acts = '<button class="btn" data-p="scout">' + icon('xp') + 'Scout</button>' +
+        (war ? (war.holder === 'player' ? '<button class="btn btn-gold" data-p="attack">Reinforce</button>' : '<button class="btn btn-gold" data-p="attack">' + icon('swords') + 'Attack</button>') : '') +
+        (CH.Throne.isPlayerKing(s) ? '<button class="btn btn-gold" data-p="court">🎁 Royal Court</button>' : '') + '<button class="btn btn-quiet" data-p="ranks">Leaderboards</button>';
     } else if (h.type === 'home') {
       head = '<h3>★ ' + esc(s.player.name) + '</h3><p class="muted">Your kingdom · power ' + U.fmt(S.power(s)) + '</p>';
       body = '<dl class="stats"><div><dt>Protection</dt><dd>' + (S.beginner(s) ? 'Beginner protection' : s.shieldUntil > now ? '🛡 ' + U.time((s.shieldUntil - now) / 1000) : 'None') + '</dd></div><div><dt>March slots</dt><dd>' + S.marchSlots(s) + '</dd></div></dl>';
@@ -6688,6 +7279,8 @@ CH.WorldUI = (function () {
       }
       case 'report': { const rep = s.reports.find(r => r.kind === 'scout' && r.targetId === h.o.id); if (rep) showReport(rep); break; }
       case 'enter': close(); break;
+      case 'court': royalCourt(); break;
+      case 'ranks': UI.sheet('ranks', 'throne'); break;
       case 'tele-random': { const r = CH.World.teleport(s, null, null); if (!r.ok) return fail(r); CH.Audio.play('magic'); CH.App.persist(); CH.App.wview.center(r.x, r.y); UI.toast('Teleported to (' + r.x + ', ' + r.y + ')', 'good'); hidePanel(); break; }
       case 'tele-pick': st.teleport = { x: W().px, y: W().py }; hidePanel(); UI.toast('Tap a spot on the map to teleport there', 'info'); teleportPanel(); break;
       case 'tele-here': st.teleport = { x: h.o.x, y: h.o.y }; teleportPanel(); break;
@@ -6717,8 +7310,13 @@ CH.WorldUI = (function () {
     const busy = CH.World.busyHeroes(s);
     const heroes = CH.HERO_ORDER.filter(id => s.heroes[id].unlocked && !busy.has(id));
     let hero = kind === 'attack' ? (heroes[0] || null) : null, formation = 'surround';
+    const canRally = kind === 'attack' && s.faction != null && ['kingdom', 'fort', 'throne'].includes(type) && !(type === 'throne' && o.war && o.war.holder === 'player');
+    const allies = canRally ? CH.Throne.rallyAllies(s, o) : [];
+    let rally = false;
+    const allyPow = allies.reduce((a, x) => a + CH.World.armyPower(x.army), 0);
     const est = () => {
       if (type === 'tile') return 0;
+      if (type === 'throne') return o.war && !o.war.ended && o.war.holder !== 'player' ? CH.World.armyPower(o.war.garrison) * 1.6 : 0;
       if (type === 'kingdom') return CH.World.power(o);
       if (type === 'fort') return o.owner === 'player' ? 0 : 6000 * Math.pow(1.5, o.lvl);
       const mon = CH.World.campMonsters(o, w, Date.now()); let p = 0; for (const t in mon) p += mon[t] * Math.max(5, Math.sqrt((CH.ENEMIES[t].hp || 50) * (CH.ENEMIES[t].dmg || 5)) / 3) * (1 + 0.25 * o.lvl);
@@ -6728,17 +7326,19 @@ CH.WorldUI = (function () {
     const rows = avail.map(t => '<div class="m-row"><canvas data-unit="' + CH.TROOPS[t].sprite + '" data-size="' + CH.TROOPS[t].size + '"></canvas><div class="m-name"><b>' + CH.TROOPS[t].name + '</b><span class="muted">' + CH.CLASS_NAMES[CH.TROOPS[t].cls] + ' · ' + U.fmt(s.army[t]) + ' home</span></div>' +
       '<input type="range" min="0" max="' + s.army[t] + '" value="' + sel[t] + '" data-t="' + t + '"><input type="number" inputmode="numeric" min="0" max="' + s.army[t] + '" value="' + sel[t] + '" data-n="' + t + '"></div>').join('');
     const heroRow = kind === 'attack' ? '<h4 class="group">Commander</h4><div class="row">' + ['', ...heroes].map(id => '<button class="tab' + ((hero || '') === id ? ' on' : '') + '" data-hero="' + id + '">' + (id ? CH.HEROES[id].name + ' L' + s.heroes[id].level : 'None') + '</button>').join('') + '</div>' : '';
+    const rallyRow = canRally ? '<h4 class="group">Rally</h4><button class="tab" data-rally>' + (allies.length ? '⚔ Rally with ' + allies.length + ' ' + CH.FACTIONS[s.faction].name + ' allies (+' + U.fmt(allyPow) + ' power, gathers ' + CH.THRONE.rallyMuster + 's)' : 'No allies free to rally right now') + '</button>' : '';
     const formRow = kind === 'attack' && type !== 'camp' ? '<h4 class="group">Formation</h4><div class="row">' + [['surround', 'Surround', 'Attack from every side'], ['spearhead', 'Spearhead', 'One concentrated thrust'], ['pincer', 'Pincer', 'Two flanks at once']].map(([k, n, d]) => '<button class="tab' + (formation === k ? ' on' : '') + '" data-form="' + k + '" title="' + d + '">' + n + '</button>').join('') + '</div>' : '';
-    const title = kind === 'gather' ? 'Gather at ' + CH.RES_TILES[o.type] : 'Attack ' + (o.name || (h.type === 'dragon' ? 'the Elder Dragon' : type === 'fort' ? 'the fort' : type === 'ruin' ? 'the ruins' : CH.CAMP_TYPES[o.kind].name));
+    const title = kind === 'gather' ? 'Gather at ' + CH.RES_TILES[o.type] : type === 'throne' ? (o.war && o.war.holder === 'player' ? 'Reinforce the ' : 'Attack the ') + CH.THRONE.name : 'Attack ' + (o.name || (h.type === 'dragon' ? 'the Elder Dragon' : type === 'fort' ? 'the fort' : type === 'ruin' ? 'the ruins' : CH.CAMP_TYPES[o.kind].name));
     UI.modal('<h3>' + esc(title) + '</h3><div class="row"><button class="btn btn-quiet" data-q="all">All</button><button class="btn btn-quiet" data-q="half">Half</button><button class="btn btn-quiet" data-q="none">Clear</button></div>' +
-      '<div class="m-list">' + rows + '</div>' + heroRow + formRow + '<div class="m-sum" id="m-sum"></div><button class="btn btn-gold btn-lg btn-block" data-send>March!</button>',
+      '<div class="m-list">' + rows + '</div>' + heroRow + formRow + rallyRow + '<div class="m-sum" id="m-sum"></div><button class="btn btn-gold btn-lg btn-block" data-send>March!</button>',
     { cls: 'wide', onClick: e => {
       const q = e.target.closest('[data-q]'), hb = e.target.closest('[data-hero]'), fb = e.target.closest('[data-form]');
+      if (e.target.closest('[data-rally]') && allies.length) { rally = !rally; e.target.closest('[data-rally]').classList.toggle('on', rally); summary(); }
       if (q) { for (const t of avail) sel[t] = q.dataset.q === 'all' ? s.army[t] : q.dataset.q === 'half' ? Math.floor(s.army[t] / 2) : 0; sync(); }
       if (hb) { hero = hb.dataset.hero || null; document.querySelectorAll('[data-hero]').forEach(x => x.classList.toggle('on', x === hb)); summary(); }
       if (fb) { formation = fb.dataset.form; document.querySelectorAll('[data-form]').forEach(x => x.classList.toggle('on', x === fb)); }
       if (e.target.closest('[data-send]')) {
-        const r = CH.World.sendMarch(s, kind, { type, id: o.id }, { ...sel }, hero, formation);
+        const r = CH.World.sendMarch(s, kind, { type, id: o.id }, { ...sel }, hero, formation, Date.now(), { rally });
         if (!r.ok) return fail(r);
         CH.Audio.play('horn'); UI.closeModal(); hidePanel(); CH.App.persist(); renderBar(true);
         UI.toast('Your army marches! Arrival in ' + U.time((r.march.t1 - Date.now()) / 1000), 'good');
@@ -6748,7 +7348,7 @@ CH.WorldUI = (function () {
     m.oninput = e => { const t = e.target.dataset.t || e.target.dataset.n; if (!t) return; sel[t] = U.clamp(Math.floor(+e.target.value || 0), 0, s.army[t]); sync(e.target); };
     function sync(src) { m.querySelectorAll('[data-t]').forEach(x => { if (x !== src) x.value = sel[x.dataset.t]; }); m.querySelectorAll('[data-n]').forEach(x => { if (x !== src) x.value = sel[x.dataset.n]; }); summary(); }
     function summary() {
-      const n = Object.values(sel).reduce((a, x) => a + x, 0), pow = CH.World.armyPower(sel) * (hero ? 1.1 : 1), load = CH.World.loadOf(sel);
+      const n = Object.values(sel).reduce((a, x) => a + x, 0), pow = (CH.World.armyPower(sel) + (rally ? allyPow : 0)) * (hero ? 1.1 : 1), load = CH.World.loadOf(sel);
       const secs = CH.World.marchSeconds({ x: w.px, y: w.py }, o, sel, CH.World.marchSpeedMult(s, hero), kind);
       const odds = kind === 'attack' && target ? pow / target : null;
       const gatherInfo = kind === 'gather' ? '<span>Brings home ' + U.fmt(Math.min(load, o.amt)) + ' ' + o.type + ' in ~' + U.time(secs * 2 + Math.min(load, o.amt) / (6 * o.lvl * (CH.World.evOn(w, Date.now(), 'resourceRush') ? 2 : 1))) + '</span>' : '';
@@ -6756,6 +7356,38 @@ CH.WorldUI = (function () {
         (odds ? '<span class="' + (odds > 1.3 ? 'good' : odds > 0.9 ? '' : 'warn') + '">' + (odds > 1.3 ? 'Favourable' : odds > 0.9 ? 'Even fight' : 'Risky') + ' vs ~' + U.fmt(target) + '</span>' : '');
     }
     summary();
+  }
+
+  /* ---------------- Royal Court (player king hands out the treasure) ---------------- */
+  function royalCourt() {
+    const s = save(), th = W().throne, TH = CH.THRONE;
+    if (!CH.Throne.isPlayerKing(s)) return;
+    const cands = W().kingdoms.slice().sort((a, b) => (b.f === s.faction) - (a.f === s.faction) || CH.World.power(b) - CH.World.power(a)).slice(0, 12);
+    const rows = th.prizes.map(p => {
+      const d = TH.prizes.find(x => x.tier === p.tier);
+      const to = p.given ? (p.given === 'player' ? 'You' : CH.Throne.keyName(s, p.given)) : null;
+      return '<div class="b-row"><div class="b-info"><b>' + d.name + '</b><span class="muted">' + UI.reward(d.reward) + '</span></div>' +
+        (to ? '<span class="good">→ ' + esc(to) + '</span>' : '<select data-pz="' + p.id + '"><option value="">Give to…</option><option value="player">Keep for yourself</option>' + cands.map(k => '<option value="' + k.id + '">' + esc(k.name) + (k.f === s.faction ? ' (ally)' : '') + '</option>').join('') + '</select>') + '</div>';
+    }).join('');
+    UI.modal('<h3>🎁 Royal Court</h3><p class="muted">As ' + TH.title + ' you hand out the Citadel\'s treasure. You may keep one chest of each kind. Kingdoms you reward stay loyal and won\'t attack you during your reign.</p><div class="b-list">' + rows + '</div>', { cls: 'wide' });
+    $('modal').onchange = e => {
+      const sel = e.target.closest('[data-pz]'); if (!sel || !sel.value) return;
+      const r = CH.Throne.distribute(s, sel.dataset.pz, sel.value);
+      if (!r.ok) { fail(r); sel.value = ''; return; }
+      CH.Audio.play('victory'); CH.App.persist(); UI.closeModal(); royalCourt();
+    };
+  }
+
+  /** Gold banner while the Throne War is live (kingdom and world screens). */
+  function warBanner() {
+    const s = save(), w = W(), el = $('warbar');
+    if (!w || !w.throne || !el) return;
+    const now = Date.now(), war = w.throne.war;
+    if (war && !war.ended && now < war.end) {
+      const txt = '👑 Throne War · ' + U.time((war.end - now) / 1000) + ' left · held by ' + CH.Throne.keyName(s, war.holder);
+      if (el.textContent !== txt) el.textContent = txt;
+      el.classList.remove('hidden');
+    } else el.classList.add('hidden');
   }
 
   /* ---------------- Marches drawer ---------------- */
@@ -6910,6 +7542,7 @@ CH.WorldUI = (function () {
   }
 
   function tick() {
+    warBanner();
     if (CH.App.mode !== 'world') return;
     const s = save(), w = W();
     const c = CH.App.wview.toWorld(CH.App.wview.canvas.getBoundingClientRect().left + CH.App.wview.w / 2, CH.App.wview.canvas.getBoundingClientRect().top + CH.App.wview.h / 2);
@@ -6920,7 +7553,7 @@ CH.WorldUI = (function () {
     CH.App.wview.draw(s, { now: Date.now(), filters: st.filters, selected: st.sel ? { x: st.sel.type === 'march' ? marchPos(st.sel.o).x : st.sel.o.x, y: st.sel.type === 'march' ? marchPos(st.sel.o).y : st.sel.o.y } : null, teleport: st.teleport });
   }
 
-  return { open, close, tick, showReport, incomingModal, offlineSummary, Replay, select, state: st, renderBar };
+  return { royalCourt, warBanner, open, close, tick, showReport, incomingModal, offlineSummary, Replay, select, state: st, renderBar };
 })();
 
 </script>

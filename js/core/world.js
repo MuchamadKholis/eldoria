@@ -112,7 +112,7 @@
     const w = { v: 1, seed, epoch: now, lastTick: now, nextId: 1, kingdoms: [], tiles: [], camps: [], ruins: [], forts: [], marches: [], news: [], px: 0, py: 0,
       lastIncomingAt: 0, offline: 0, eventIdx: -1, fpts: [0, 0, 0, 0], territoryAward: -1 };
     const taken = [];
-    const free = (x, y, r) => x > 1 && y > 1 && x < N - 2 && y < N - 2 && !taken.some(p => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
+    const free = (x, y, r) => x > 1 && y > 1 && x < N - 2 && y < N - 2 && Math.hypot(x - N / 2, y - N / 2) > 7 && !taken.some(p => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
     const place = (minR, maxR, r, tries = 400) => {
       for (let i = 0; i < tries; i++) {
         const a = rnd() * Math.PI * 2, d = (minR + rnd() * (maxR - minR)) * N / 2;
@@ -157,12 +157,14 @@
     for (let i = 0; i < 6; i++) { const p = place(0.3, 0.6, 4); if (p) w.forts.push({ id: 'f' + w.nextId++, x: p.x, y: p.y, lvl: 4 + Math.floor(rnd() * 3), bonus: fortBonus[i], owner: null, ownerName: null, ownerF: null }); }
     for (const k of w.kingdoms) { k.last = now; k.next = now + Math.floor(rnd() * C.AI_THINK * 1000); k.nextAtk = now + (5 + rnd() * 20) * MIN; }
     w.news.push({ t: now, text: 'The realm of Eldoria awakens. ' + w.kingdoms.length + ' kingdoms vie for power.', kind: 'world' });
+    if (CH.Throne) CH.Throne.ensure(w);
     return w;
   }
 
   /* ---------------- Queries ---------------- */
   const W = s => s.world;
-  const findAny = (w, id) => w.kingdoms.find(k => k.id === id) || w.camps.find(c => c.id === id) || w.tiles.find(t => t.id === id) || w.ruins.find(r => r.id === id) || w.forts.find(f => f.id === id) || (w.dragon && w.dragon.id === id ? w.dragon : null);
+  const findAny = (w, id) => id === 'throne' ? w.throne : findAny0(w, id);
+  const findAny0 = (w, id) => w.kingdoms.find(k => k.id === id) || w.camps.find(c => c.id === id) || w.tiles.find(t => t.id === id) || w.ruins.find(r => r.id === id) || w.forts.find(f => f.id === id) || (w.dragon && w.dragon.id === id ? w.dragon : null);
   function eventAt(w, T) {
     const i = Math.floor((T - w.epoch) / EVENT_CYCLE);
     const inside = (T - w.epoch) % EVENT_CYCLE < EVENT_LEN;
@@ -250,6 +252,8 @@
       const n = Math.floor(Math.min(target - cur, Math.max(0, k.res.food) / per, Math.max(0, k.res.gold) / per, (target - cur) * 0.45 + 20));
       if (n > 0) { trainAI(k, n, rnd); k.res.food -= n * per * 0.8; k.res.gold -= n * per * 0.8; }
     }
+    // During the Throne War the Citadel comes first.
+    if (CH.Throne && CH.Throne.aiDecide(s, k, T, ev, rnd)) return;
     // War
     if (k.out || T < k.nextAtk || armyCount(k.tr) < target * 0.4) return;
     const myPow = armyPower(k.tr) * P.send * (1 + 0.04 * k.hl);
@@ -300,6 +304,7 @@
     if (T - w.lastIncomingAt < C.INCOMING_GAP_MIN * MIN) return false;
     if (w.marches.some(m => m.target && m.target.type === 'player' && m.kind === 'attack')) return false;
     if (k.pcd > T) return false;
+    if (k.friendUntil > T) return false; // rewarded by you as king: loyal for your reign
     if (w.offline >= 0 && w.offlineAttacks >= C.MAX_OFFLINE_ATTACKS) return false;
     const myPow = armyPower(k.tr) * CH.PERSONALITIES[k.p].send;
     const pp = playerDefPower(s);
@@ -395,6 +400,7 @@
     if (m.kind === 'scout') { scoutReport(s, m, T, ev); returnMarch(w, m, T, m.army, {}); return; }
     // ---- attacks ----
     const tgt = m.target;
+    if (tgt.type === 'throne') return CH.Throne.arrive(s, m, T, ev);
     if (tgt.type === 'player') return defendPlayer(s, m, owner, T, ev);
     if (m.owner === 'player') return playerAttack(s, m, T, ev);
     // AI vs AI / neutral
@@ -409,6 +415,8 @@
       let loot = {};
       if (res.win) { loot = takeLoot(lootable(d.res, 0.3), loadOf(m.army) * (CH.PERSONALITIES[owner.p].loot || 1)); for (const r in loot) d.res[r] -= loot[r]; }
       owner.wins += res.win ? 1 : 0; owner.losses += res.win ? 0 : 1; d.losses += res.win ? 1 : 0;
+      owner.kills = (owner.kills || 0) + armyCount(dLost); d.kills = (d.kills || 0) + armyCount(aLost);
+      if (res.win) d.burn = T + 10 * MIN; else d.smoke = T + 6 * MIN;
       d.lastBy = owner.id;
       if (res.win && (d.p === 'defensive' || d.p === 'peaceful')) d.sh = T + 60 * MIN;
       const tot = Object.values(loot).reduce((a, n) => a + n, 0);
@@ -450,7 +458,7 @@
     const cl = CH.State.castleLevel(s);
     const homeHeroes = [];
     const busy = new Set(w.marches.filter(x => x.owner === 'player').map(x => x.hero));
-    if (s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero)) homeHeroes.push({ id: s.defenseHero, level: s.heroes[s.defenseHero].level });
+    if (s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero)) homeHeroes.push({ id: s.defenseHero, level: s.heroes[s.defenseHero].level, skin: CH.State.heroSkin(s, s.defenseHero) });
     const garrison = { ...s.army };
     let helpers = 0;
     if (s.helpUntil > T && s.faction != null) {
@@ -468,6 +476,7 @@
         army: garrison, heroes: homeHeroes, research: s.research.troops, fortBonus },
       formation: U.pick(['surround', 'spearhead', 'pincer'], U.rng(T % 1e9)), dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
+    cfg.castleSkin = s.equipped ? s.equipped.castle : null;
     const sum = CH.Siege.run(cfg);
     // Defender casualties (only the player's own troops; helpers' losses are theirs).
     const ownLost = {};
@@ -485,6 +494,8 @@
     }
     // Recovery period: the worse it went for you, the longer the protection.
     s.shieldUntil = Math.max(s.shieldUntil, T + C.POST_ATTACK_SHIELD_MIN * MIN * (outcome === 'win' ? 2 : outcome === 'partial' ? 1.5 : 1));
+    s.stats.kills += armyCount(sum.atk.lost); owner.kills = (owner.kills || 0) + armyCount(sum.def.lost);
+    if (outcome === 'win') w.pburn = T + 10 * MIN; else w.psmoke = T + 6 * MIN;
     owner.grudge = outcome === 'loss' ? Math.min(5, owner.grudge + (CH.PERSONALITIES[owner.p].aggr > 0.5 ? 1 : 0)) : owner.grudge;
     let reward = {};
     if (outcome === 'loss') {
@@ -535,8 +546,10 @@
   /** The player's march arrives at its target: build and run the battle. */
   function playerAttack(s, m, T, ev) {
     const w = W(s), tgt = m.target;
-    const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level } : null;
-    const attacker = { name: s.player.name, army: m.army, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
+    const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero) } : null;
+    const own = m.army, mergedArmy = { ...m.army };
+    for (const x of m.allies || []) for (const t in x.army) mergedArmy[t] = (mergedArmy[t] || 0) + x.army[t];
+    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
     const dir = { x: m.tx - m.fx, y: m.ty - m.fy }, seed = (T % 1e9) | 0;
     let cfg, defender, target;
     if (tgt.type === 'kingdom') {
@@ -558,11 +571,16 @@
     }
     cfg = CH.Siege.build({ attacker, defender, formation: m.formation || 'surround', dir, seed, playerSide: 'atk' });
     const sum = CH.Siege.run(cfg);
-    // Player casualties: half wounded (infirmary), half dead.
-    for (const t in sum.atk.lost) m.army[t] = Math.max(0, (m.army[t] || 0) - sum.atk.lost[t]);
-    const half = {}; for (const t in sum.atk.lost) half[t] = Math.floor(sum.atk.lost[t] * 0.5);
+    // Survivors are shared out by contribution; rally allies take theirs home.
+    const ratio = t => (sum.atk.sent[t] ? (sum.atk.left[t] || 0) / sum.atk.sent[t] : 0);
+    const ownLost = {};
+    for (const t in own) { const keep = Math.floor(own[t] * ratio(t)); if (own[t] - keep > 0) ownLost[t] = own[t] - keep; m.army[t] = keep; }
+    for (const x of m.allies || []) { const k = w.kingdoms.find(o => o.id === x.id); if (k) { for (const t in x.army) k.tr[t] = (k.tr[t] || 0) + Math.floor(x.army[t] * ratio(t)); k.out = false; } }
+    // Your casualties: half wounded (infirmary), half dead.
+    const half = {}; for (const t in ownLost) half[t] = Math.floor(ownLost[t] * 0.5);
     const cas = CH.State.addCasualties(s, half);
-    cas.dead += Object.values(sum.atk.lost).reduce((a, n) => a + n, 0) - Object.values(half).reduce((a, n) => a + n, 0);
+    cas.dead += armyCount(ownLost) - armyCount(half);
+    s.stats.kills += armyCount(sum.def.lost);
     const won = sum.outcome !== 'loss';
     let loot = {}, reward = {}, items = {};
     if (tgt.type === 'kingdom') {
@@ -577,6 +595,8 @@
         k.losses++;
       } else k.wins++;
       k.tcd = T + C.TARGET_COOLDOWN_MIN * MIN;
+      k.kills = (k.kills || 0) + armyCount(sum.atk.lost);
+      if (sum.outcome === 'win') k.burn = T + 10 * MIN; else k.smoke = T + 6 * MIN;
       k.grudge = Math.min(5, k.grudge + (CH.PERSONALITIES[k.p].aggr >= 0.45 ? 2 : 1));
       k.lastBy = 'player';
       if (won && (k.p === 'defensive' || k.p === 'peaceful')) k.sh = T + 45 * MIN;
@@ -636,6 +656,10 @@
         byClass: lvl >= 1 ? Object.fromEntries(Object.entries(k.tr).reduce((m2, [t, n]) => { const c = CH.TROOPS[t].cls; m2.set(c, (m2.get(c) || 0) + n); return m2; }, new Map())) : null,
         troops: lvl >= 2 ? { ...k.tr } : null, power: Math.round(aiDefPower(k)),
         layout: CH.Raid.layout(k.seed + k.cl * 7, k.cl, k.cl <= 1 ? 'beginner' : P.arch), hist: k.hist.slice(0, 3) };
+    } else if (m.target.type === 'throne') {
+      const war = k.war && !k.war.ended ? k.war : null;
+      rep = { t: T, kind: 'scout', title: 'Scout report: ' + CH.THRONE.name, outcome: 'win', coords: [k.x, k.y], targetId: 'throne', monsters: war ? war.garrison : {},
+        note: war ? 'Held by ' + CH.Throne.keyName(s, war.holder) : 'No war in progress. The Citadel opens on Saturday at ' + CH.THRONE.warHour + ':00.' };
     } else {
       rep = { t: T, kind: 'scout', title: 'Scout report: (' + k.x + ',' + k.y + ')', outcome: 'win', coords: [k.x, k.y], targetId: k.id, monsters: campMonsters(k, w, T) };
     }
@@ -646,6 +670,7 @@
   /* ---------------- World tick ---------------- */
   function processUntil(s, T, ev) {
     const w = W(s);
+    if (CH.Throne) CH.Throne.update(s, T, ev);
     // Arrivals in time order.
     for (;;) {
       let nxt = null;
@@ -701,14 +726,21 @@
   /* ---------------- Player actions ---------------- */
   function ensure(s, now = Date.now()) {
     if (!s.world) s.world = create(Math.floor(Math.random() * 1e9) + 1, now);
+    if (CH.Throne) CH.Throne.ensure(s.world);
     return s.world;
   }
   function playerMarches(s) { return W(s).marches.filter(m => m.owner === 'player'); }
   function busyHeroes(s) { return new Set(playerMarches(s).map(m => m.hero).filter(Boolean)); }
 
   /** kind: 'attack' | 'scout' | 'gather'. target: {type, id}. */
-  function sendMarch(s, kind, target, army, heroId, formation, now = Date.now()) {
+  function sendMarch(s, kind, target, army, heroId, formation, now = Date.now(), opts = {}) {
     const w = W(s);
+    if (target.type === 'throne') {
+      const war = w.throne.war;
+      if (kind === 'scout') { /* allowed any time */ }
+      else if (!war || war.ended || now >= war.end) return { ok: false, reason: 'The Citadel can only be attacked during the Throne War (Saturday ' + CH.THRONE.warHour + ':00)' };
+    }
+    if (opts.rally && s.faction == null) return { ok: false, reason: 'Join a faction to start a rally' };
     if (kind !== 'scout' && playerMarches(s).filter(m => m.kind !== 'return' && m.kind !== 'scout').length >= CH.State.marchSlots(s)) return { ok: false, reason: 'All march slots are in use (' + CH.State.marchSlots(s) + ')' };
     const obj = target.type === 'kingdom' ? w.kingdoms.find(k => k.id === target.id) : findAny(w, target.id);
     if (!obj) return { ok: false, reason: 'Target not found' };
@@ -735,6 +767,11 @@
     const secs = marchSeconds(from, obj, army, marchSpeedMult(s, heroId), kind);
     const m = { id: 'm' + w.nextId++, owner: 'player', kind, fx: w.px, fy: w.py, tx: obj.x, ty: obj.y, t0: now, t1: now + secs * 1000, army: { ...army }, hero: kind === 'scout' ? null : heroId || null,
       heroLevel: heroId ? s.heroes[heroId].level : 0, formation: formation || 'surround', target: { type: target.type, id: target.id }, cargo: {} };
+    if (opts.rally && kind === 'attack') {
+      const al = CH.Throne.rallyAllies(s, obj);
+      m.allies = al.map(x => { for (const t in x.army) x.k.tr[t] -= x.army[t]; x.k.out = true; return { id: x.k.id, name: x.k.name, army: x.army }; });
+      m.rally = true; m.t1 += CH.THRONE.rallyMuster * 1000;
+    }
     w.marches.push(m);
     return { ok: true, march: m };
   }
@@ -749,12 +786,14 @@
       w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: m.tx, fy: m.ty, tx: w.px, ty: w.py, t0: now, t1: now + (m.travel || 30000), cargo: tile ? { [tile.type]: got } : {}, target: { type: 'home' } });
       return true;
     }
+    for (const x of m.allies || []) { const k = w.kingdoms.find(o => o.id === x.id); if (k) { for (const t in x.army) k.tr[t] = (k.tr[t] || 0) + x.army[t]; k.out = false; } }
     const f = U.clamp((now - m.t0) / (m.t1 - m.t0), 0, 1);
     const cx = m.fx + (m.tx - m.fx) * f, cy = m.fy + (m.ty - m.fy) * f;
     w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: cx, fy: cy, tx: m.fx, ty: m.fy, t0: now, t1: now + Math.max(5000, now - m.t0), cargo: {}, target: { type: 'home' } });
     return true;
   }
   function occupiedNear(w, x, y, r = 2) {
+    if (w.throne && Math.hypot(w.throne.x - x, w.throne.y - y) < 6) return true;
     if (Math.abs(w.px - x) <= r && Math.abs(w.py - y) <= r) return true;
     for (const L of [w.kingdoms, w.tiles, w.camps, w.ruins, w.forts]) for (const o of L) if (Math.abs(o.x - x) <= r && Math.abs(o.y - y) <= r) return true;
     return false;
@@ -822,12 +861,13 @@
     for (const k of raw.kingdoms) { for (const r of ['gold', 'wood', 'stone', 'food']) k.res[r] = Math.max(0, +k.res[r] || 0); for (const t in k.tr) if (!CH.TROOPS[t] || !(k.tr[t] >= 0)) delete k.tr[t]; if (k.last > now) k.last = now; }
     for (const L of ['tiles', 'camps', 'ruins', 'forts', 'news']) if (!Array.isArray(raw[L])) raw[L] = [];
     if (!Array.isArray(raw.fpts)) raw.fpts = [0, 0, 0, 0];
+    if (CH.Throne) CH.Throne.ensure(raw);
     return raw;
   }
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
     sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
-    territoryBonus, onShield, findAny, campMonsters, campRewards, dist, N, heroXp, PKEYS,
+    territoryBonus, onShield, findAny, campMonsters, clash, addReport, campRewards, dist, N, heroXp, PKEYS,
   };
 })();

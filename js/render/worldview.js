@@ -97,9 +97,10 @@ CH.WorldView = (function () {
       if (f.res) for (const t of w.tiles) if (vis(t)) this.resTile(c, t);
       if (f.mon) { for (const m of w.camps) if (vis(m) && !m.dead) this.camp(c, m); for (const r of w.ruins) if (vis(r) && !r.dead) this.ruin(c, r); if (w.dragon) this.dragonIcon(c, w.dragon, now); }
       for (const fo of w.forts) if (vis(fo)) this.fort(c, fo);
+      if (w.throne) this.citadel(c, w.throne, now, s);
       const pPow = CH.State.power(s);
       if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) this.kingdom(c, k2, now, false);
-      this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name }, now, true);
+      this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name, burn: w.pburn, smoke: w.psmoke, skin: s.equipped && s.equipped.castle }, now, true);
       // Marches
       for (const m of w.marches) {
         const mine = m.owner === 'player', hostile = m.target && m.target.type === 'player';
@@ -129,25 +130,57 @@ CH.WorldView = (function () {
         const label = (x, y, txt, col, dy) => { const p = this.toScreen((x + 0.5) * TW, (y + 0.5) * TW + dy); c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.75)'; c.strokeText(txt, p.x, p.y); c.fillStyle = col; c.fillText(txt, p.x, p.y); };
         if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) label(k2.x, k2.y, k2.name + ' · ' + CH.util.fmt(CH.World.power(k2)), k2.sh > now ? '#9fd4ff' : CH.FACTIONS[k2.f].color, 34);
         label(w.px, w.py, '★ ' + s.player.name, '#ffe08a', 36);
+        if (w.throne) { const th = w.throne, war = th.war && !th.war.ended && now < th.war.end ? th.war : null;
+          label(th.x, th.y, '👑 ' + CH.THRONE.name, '#ffe9a8', 92);
+          label(th.x, th.y, war ? '⚔ Held by ' + CH.Throne.keyName(s, war.holder) : th.king ? 'King: ' + th.king.name : 'No king', war ? '#ff9a8a' : '#e8f0ff', 108); }
         if (z > 0.6 && f.mon) for (const m of w.camps) if (vis(m) && !m.dead) label(m.x, m.y, 'Lv ' + m.lvl, '#ffb3a8', 24);
         if (z > 0.6 && f.res) for (const t of w.tiles) if (vis(t)) label(t.x, t.y, 'Lv ' + t.lvl, '#e8f2d8', 22);
       }
+    }
+    /** The Aurelion Citadel: the Throne of Eldoria. */
+    citadel(c, th, now, s) {
+      const x = (th.x + 0.5) * TW, y = (th.y + 0.5) * TW, t = now / 1000;
+      const war = th.war && !th.war.ended && now < th.war.end;
+      c.save(); c.translate(x, y);
+      c.globalCompositeOperation = 'lighter'; A.glow(c, 0, -30, 150, war ? '255,90,60' : '255,220,140', 0.28 + Math.sin(t * 1.5) * 0.06); c.globalCompositeOperation = 'source-over';
+      A.ell(c, 0, 40, 130, 34, 'rgba(0,0,0,0.35)');
+      A.ell(c, 0, 34, 120, 30, '#c9bfa8'); A.ell(c, 0, 26, 104, 25, '#e2dac6'); A.ell(c, 0, 20, 88, 21, '#f2ecdc');
+      A.rect(c, -78, -16, 156, 38, '#eee6d2'); for (let i = -78; i < 78; i += 12) A.rect(c, i, -22, 7, 6, '#eee6d2');
+      for (const dx of [-80, -40, 40, 80]) { A.rect(c, dx - 10, -50, 20, 72, '#f6f0e2'); A.poly(c, [dx - 13, -50, dx, -76, dx + 13, -50], '#d4a843'); A.circle(c, dx, -78, 3, '#ffe08a'); }
+      A.rect(c, -24, -90, 48, 112, '#fbf7ec'); A.poly(c, [-28, -90, 0, -150, 28, -90], '#e8c25a', 'rgba(120,80,10,0.6)', 2);
+      A.rect(c, -9, -6, 18, 28, '#3a2614'); A.circle(c, 0, -6, 9, '#3a2614');
+      for (const dy of [-70, -45]) A.rect(c, -6, dy, 12, 14, '#7ab8ff');
+      const cy = -168 + Math.sin(t * 2) * 5;
+      A.poly(c, [-18, cy + 10, -18, cy - 6, -9, cy + 2, 0, cy - 12, 9, cy + 2, 18, cy - 6, 18, cy + 10], '#ffd34a', '#8a5a10', 2);
+      for (const dx of [-18, 0, 18]) A.circle(c, dx, cy - (dx ? 7 : 13), 3, '#ff5a5a');
+      const hk = war ? th.war.holder : th.king ? th.king.key : null;
+      const col = hk === 'player' ? '#5fb0ff' : hk && hk !== 'guard' ? (CH.FACTIONS[(s.world.kingdoms.find(k => k.id === hk) || {}).f] || { color: '#bbb' }).color : '#f2ecdc';
+      for (const dx of [-80, 80]) { A.line(c, dx, -78, dx, -104, '#5a3a1a', 2); A.poly(c, [dx, -104, dx + 22, -98 + Math.sin(t * 4 + dx) * 2, dx, -90], col); }
+      if (war) { c.beginPath(); c.arc(0, 0, 150 + Math.sin(t * 4) * 6, 0, 6.283); c.strokeStyle = 'rgba(255,80,60,0.7)'; c.lineWidth = 4; c.setLineDash([16, 10]); c.lineDashOffset = -t * 30; c.stroke(); c.setLineDash([]); }
+      if (th.burn > now) { A.fireFx(c, -40, 10, 30, t); A.fireFx(c, 40, 10, 30, t + 1); A.fireFx(c, 0, -40, 34, t + 2); }
+      else if (th.smoke > now) { A.smokeFx(c, -30, -60, 26, t); A.smokeFx(c, 30, -50, 26, t + 1.5); }
+      c.restore();
     }
     passDiff(d, p, mine) { if (!d || d === 'all') return true; const r = p / Math.max(1, mine); return d === 'weak' ? r < 0.8 : d === 'even' ? r >= 0.8 && r <= 1.25 : r > 1.25; }
 
     kingdom(c, k, now, mine) {
       const x = (k.x + 0.5) * TW, y = (k.y + 0.5) * TW, sc = 0.7 + k.cl * 0.07;
-      const roof = mine ? '#3a62c9' : k.f != null ? CH.FACTIONS[k.f].color : '#888';
+      const sk = k.skin && k.skin !== 'classic' ? CH.SKINS[k.skin] : null;
+      const roof = sk ? sk.roof : mine ? '#3a62c9' : k.f != null ? CH.FACTIONS[k.f].color : '#888';
+      if (sk) { c.save(); c.globalCompositeOperation = 'lighter'; A.glow(c, x, y - 8 * sc, 46 * sc, sk.aura, 0.3); c.restore(); }
       c.save(); c.translate(x, y); c.scale(sc, sc);
       A.ell(c, 0, 14, 30, 9, 'rgba(0,0,0,0.3)');
       if (mine) { c.beginPath(); c.arc(0, 0, 34, 0, 6.283); c.strokeStyle = '#ffe08a'; c.lineWidth = 3; c.stroke(); }
-      const st = k.cl >= 6 ? '#d9d4c8' : k.cl >= 3 ? '#a9a6a0' : '#9b8f7a';
+      const st = sk ? sk.wall : k.cl >= 6 ? '#d9d4c8' : k.cl >= 3 ? '#a9a6a0' : '#9b8f7a';
       A.rect(c, -18, -10, 36, 22, st); for (let i = -18; i < 18; i += 7) A.rect(c, i, -14, 4, 4, st);
       for (const dx of [-18, 18]) { A.rect(c, dx - 6, -22, 12, 34, st); A.poly(c, [dx - 8, -22, dx, -34, dx + 8, -22], roof); }
       A.rect(c, -7, -26, 14, 18, st); A.poly(c, [-9, -26, 0, -42, 9, -26], roof);
       A.rect(c, -4, 3, 8, 9, '#2a1d12');
       A.circle(c, 0, -46, 7, 'rgba(10,14,30,0.85)'); c.font = '900 9px system-ui'; c.textAlign = 'center'; c.fillStyle = '#ffe08a'; c.fillText(k.cl, 0, -43);
       if (k.sh > now) { c.beginPath(); c.arc(0, -6, 30, 0, 6.283); c.fillStyle = 'rgba(120,190,255,0.18)'; c.fill(); c.strokeStyle = 'rgba(160,215,255,0.8)'; c.lineWidth = 2; c.stroke(); }
+      if (sk) A.skinParticles(c, sk.fx, 0, -14, 26, now / 1000);
+      if (k.burn > now) { A.fireFx(c, -12, 10, 24, now / 1000); A.fireFx(c, 14, 4, 20, now / 1000 + 1.3); }
+      else if (k.smoke > now) A.smokeFx(c, 0, -26, 22, now / 1000, 0.6);
       c.restore();
     }
     resTile(c, t) {

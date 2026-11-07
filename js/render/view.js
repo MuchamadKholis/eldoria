@@ -219,7 +219,9 @@ CH.View = (function () {
       if (ui.moving && ui.moving.id === b.id) continue;
       const d = CH.BUILDINGS[b.type];
       const fill = d.cat === 'storage' ? Math.min(1, save.res[d.res] / CH.State.capacity(save, d.res)) : null;
-      A.drawBuilding(c, b, { time, links: links.get(b) || 0, constructing: !!b.job && b.job.kind !== 'clear', fill, angle: -0.6 + Math.sin(time * 0.5 + b.id) * 0.4 });
+      const isCastle = b.type === 'castle', wNow = Date.now();
+      A.drawBuilding(c, b, { time, links: links.get(b) || 0, constructing: !!b.job && b.job.kind !== 'clear', fill, angle: -0.6 + Math.sin(time * 0.5 + b.id) * 0.4,
+        skin: isCastle && save.equipped ? save.equipped.castle : null, burning: isCastle && save.world && save.world.pburn > wNow, smoking: isCastle && save.world && save.world.psmoke > wNow });
     }
     // overlays: timers, collect bubbles
     for (const b of save.buildings) {
@@ -295,7 +297,7 @@ CH.View = (function () {
           if (bd.def.cat === 'trap') { A.ell(c, bd.cx, bd.cy, 9, 5, 'rgba(30,20,10,0.5)'); continue; }
           rubble(c, bd); continue;
         }
-        A.drawBuilding(c, bd, { time, links: links.get(bd) || 0, angle: bd.angle, anim: bd.anim > 0 ? bd.anim / 0.2 : 0, hidden: bd.hidden, armed: bd.armed, frozen: bd.frozen > 0, hit: bd.hit > 0, fill: 0.7 });
+        A.drawBuilding(c, bd, { time, skin: bd.type === 'castle' ? b.castleSkin : null, links: links.get(bd) || 0, angle: bd.angle, anim: bd.anim > 0 ? bd.anim / 0.2 : 0, hidden: bd.hidden, armed: bd.armed, frozen: bd.frozen > 0, hit: bd.hit > 0, fill: 0.7 });
         if (bd.hp < bd.maxHp && bd.def.cat !== 'trap') hpBar(c, bd.x + 4, bd.y - 6, bd.size * T - 8, bd.hp / bd.maxHp, b.mode === 'raid' ? '#e86a4a' : '#6fd36a');
         if (ui.selectedB === bd) rangeRing(c, bd.cx, bd.cy, bd.atk ? bd.atk.range : 0, bd.atk ? bd.atk.min : 0);
       } else A.drawUnit(c, e.u, e.u.side === b.playerSide, time);

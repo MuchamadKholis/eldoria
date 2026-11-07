@@ -307,6 +307,66 @@ CH.Screens = (function () {
     };
   }
 
+  /* ---------------- Leaderboards ---------------- */
+  function ranks(tab) {
+    const s = save(), lb = CH.Throne.leaderboards(s), th = s.world.throne, now = Date.now();
+    tab = tab || ranks.tab || 'power'; ranks.tab = tab;
+    const fc = f => f != null ? '<span style="color:' + CH.FACTIONS[f].color + '">' + CH.FACTIONS[f].name + '</span>' : '<span class="muted">No faction</span>';
+    const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    const list = (rows, val) => {
+      const me = rows.findIndex(r => r.me);
+      const top = rows.slice(0, 20).map((r, i) => '<div class="rank-row' + (r.me ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(r.name) + '</b><span class="muted">' + fc(r.f) + '</span><span class="rv">' + val(r) + '</span></div>').join('');
+      return top + (me >= 20 ? '<div class="rank-row me"><span class="rk">' + (me + 1) + '.</span><b>' + esc(rows[me].name) + '</b><span class="muted">' + fc(rows[me].f) + '</span><span class="rv">' + val(rows[me]) + '</span></div>' : '');
+    };
+    let html;
+    if (tab === 'power') html = list(lb.power, r => U.fmt(r.power));
+    else if (tab === 'kills') html = list(lb.kills, r => U.fmt(r.kills) + ' ☠');
+    else if (tab === 'factions') html = lb.factions.map((x, i) => '<div class="rank-row' + (x.f.id === s.faction ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b style="color:' + x.f.color + '">' + x.f.name + '</b><span class="muted">' + x.members + ' castles · ' + U.fmt(x.kills) + ' kills</span><span class="rv">' + U.fmt(x.power) + '</span></div>').join('');
+    else {
+      const war = th.war, live = war && !war.ended && now < war.end;
+      const hold = war ? Object.entries(war.hold).map(([k, ms]) => [k, ms + (live && war.holder === k ? now - war.holdStart : 0)]) : [];
+      if (live && war.holder !== 'guard' && !war.hold[war.holder]) hold.push([war.holder, now - war.holdStart]);
+      hold.sort((a, b) => b[1] - a[1]);
+      const kills = war ? Object.entries(war.kills).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
+      html = '<div class="panel ev-now"><span class="kicker">' + CH.THRONE.title + '</span><h3>' + (th.king ? '👑 ' + esc(th.king.name) : 'No king') + '</h3>' + (th.king ? '<p class="muted">Reigns until ' + new Date(th.king.until).toLocaleString() + ' · held the throne ' + U.time(th.king.held / 1000) + '</p>' : '') +
+        '<p>' + (live ? '<b class="warn">Throne War live · ' + U.time((war.end - now) / 1000) + ' left</b>' : 'Next Throne War: ' + new Date(CH.Throne.warWindow(now).next).toLocaleString()) + '</p></div>' +
+        (war ? '<h4 class="group">' + (live ? 'Hold time (live)' : 'Last war: hold time') + '</h4>' + (hold.map(([k, ms], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.time(ms / 1000) + '</span></div>').join('') || '<p class="muted">Nobody has taken the Citadel yet.</p>') +
+          '<h4 class="group">Top killers of the war</h4>' + kills.map(([k, n], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.fmt(n) + ' ☠</span></div>').join('') : '') +
+        (th.history.length ? '<h4 class="group">Past kings</h4><ul class="news">' + th.history.map(h => '<li>' + new Date(h.t).toLocaleDateString() + ' · ' + esc(h.name) + ' (' + U.time(h.held / 1000) + ')</li>').join('') + '</ul>' : '');
+    }
+    return {
+      title: 'Leaderboards',
+      html: '<div class="tabs">' + [['power', 'Power'], ['factions', 'Factions'], ['kills', 'Killers'], ['throne', '👑 Throne']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '</div><div class="ranks">' + html + '</div>',
+      on: { tab: b => UI.sheet('ranks', b.dataset.t, false) },
+    };
+  }
+
+  /* ---------------- Skins (wardrobe) ---------------- */
+  function skins(tab) {
+    const s = save(); tab = tab || skins.tab || 'castle'; skins.tab = tab;
+    const paintCastle = id => { const key = 'skinC' + id; UI.painters[key] = cv => { const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); c.translate(cv.width / 2 - 48 * 1.1, 70); c.scale(1.1, 1.1); CH.Art.drawBuilding(c, { type: 'castle', level: 6, tx: 0, ty: 0 }, { time: 1.3, skin: id }); }; return '<canvas class="skin-prev" width="200" height="190" data-paint="' + key + '"></canvas>'; };
+    const paintHero = (h, id) => { const key = 'skinH' + h + id; UI.painters[key] = cv => { const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); const d = CH.HEROES[h]; CH.Art.drawUnit(c, { x: cv.width / 2, y: cv.height - 14, size: d.size * 2.4, def: d, anim: 0.4, swing: 0, facing: 1, hp: 1, maxHp: 1, skin: id }, true, 1.3); }; return '<canvas class="skin-prev hero" width="110" height="120" data-paint="' + key + '"></canvas>'; };
+    const btn = (kind, id, hero) => {
+      const own = S.ownsSkin(s, kind, id, hero), on = kind === 'castle' ? s.equipped.castle === id : S.heroSkin(s, hero) === id;
+      return on ? '<span class="good">Equipped</span>' : own ? '<button class="btn" data-act="equip" data-k="' + kind + '" data-id="' + id + '" data-h="' + (hero || '') + '">Equip</button>'
+        : '<button class="btn btn-gem" data-act="buy" data-k="' + kind + '" data-id="' + id + '" data-h="' + (hero || '') + '"' + (s.res.gems >= CH.SKINS[id][kind] ? '' : ' disabled') + '>' + icon('gems') + CH.SKINS[id][kind] + '</button>';
+    };
+    let html;
+    if (tab === 'castle') html = '<div class="k-grid">' + CH.SKIN_ORDER.map(id => '<div class="panel skin-card">' + paintCastle(id) + '<b>' + CH.SKINS[id].name + '</b><span class="muted">' + CH.SKINS[id].theme + '</span>' + btn('castle', id) + '</div>').join('') + '</div>';
+    else html = CH.HERO_ORDER.map(h => '<div class="panel skin-hero"><h3>' + CH.HEROES[h].name + (s.heroes[h].unlocked ? '' : ' <span class="muted">(not recruited yet)</span>') + '</h3><div class="skin-row">' +
+      CH.SKIN_ORDER.map(id => '<div class="skin-mini">' + paintHero(h, id) + '<span>' + CH.SKINS[id].name + '</span>' + btn('hero', id, h) + '</div>').join('') + '</div></div>').join('');
+    return {
+      title: 'Skins',
+      html: '<div class="tabs"><button class="tab' + (tab === 'castle' ? ' on' : '') + '" data-act="tab" data-t="castle">Castle</button><button class="tab' + (tab === 'hero' ? ' on' : '') + '" data-act="tab" data-t="hero">Heroes</button><span class="muted">' + icon('gems') + U.fmt(s.res.gems) + ' gems</span></div>' +
+        '<p class="lead">Four themes: Dunia (Verdant), Surgawi (Celestial), Neraka (Infernal) and Kegelapan (Abyssal). Castle skins show in your kingdom, on the world map and in battles; hero skins show wherever your heroes fight. Skins are cosmetic.</p>' + html,
+      on: {
+        tab: b => UI.sheet('skins', b.dataset.t, false),
+        buy: b => { const r = S.buySkin(s, b.dataset.k, b.dataset.id, b.dataset.h || null); if (!r.ok) return fail(r); CH.Audio.play('victory'); persist(); UI.toast(CH.SKINS[b.dataset.id].name + ' unlocked and equipped!', 'good'); UI.refreshSheet(); },
+        equip: b => { S.equipSkin(s, b.dataset.k, b.dataset.id, b.dataset.h || null); CH.Audio.play('click'); persist(); UI.refreshSheet(); },
+      },
+    };
+  }
+
   /* ---------------- Gem shop ---------------- */
   function store() {
     const s = save(), G = CH.GEM_SHOP, R = ['gold', 'wood', 'stone', 'food'];
@@ -318,9 +378,14 @@ CH.Screens = (function () {
       title: 'Gem Shop',
       html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
         '<h4 class="group">Resources</h4><p class="muted">Bought resources are added straight to your kingdom and can go above your storage limit.</p><div class="k-grid">' + resCards + '</div>' +
+        '<h4 class="group">Marches</h4><div class="b-row">' + icon('swords', 'big-ico') + '<div class="b-info"><b>Extra march slot</b><span class="muted">You have ' + S.marchSlots(s) + ' of ' + CH.MAX_MARCHES + ' marches (' + S.baseMarchSlots(s) + ' from your castle + ' + (s.extraMarch || 0) + ' bought). Permanent.</span></div>' +
+          (S.marchSlots(s) >= CH.MAX_MARCHES ? '<span class="maxed">Max</span>' : '<button class="btn btn-gem" data-act="march"' + (s.res.gems >= CH.GEM_SHOP.marchSlot(s.extraMarch || 0) ? '' : ' disabled') + '>' + icon('gems') + CH.GEM_SHOP.marchSlot(s.extraMarch || 0) + '</button>') + '</div>' +
+        '<h4 class="group">Skins</h4><div class="b-row">' + icon('shield', 'big-ico') + '<div class="b-info"><b>Castle & hero skins</b><span class="muted">Dunia, Surgawi, Neraka, Kegelapan</span></div><button class="btn btn-gold" data-act="skins">Open wardrobe</button></div>' +
         '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
       on: {
         res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
+        march: () => { const r = S.buyMarchSlot(s); if (!r.ok) return fail(r); CH.Audio.play('horn'); persist(); UI.toast('New march slot! You now have ' + S.marchSlots(s) + ' marches.', 'good'); UI.refreshSheet(); },
+        skins: () => UI.sheet('skins'),
       },
     };
     function doBuy(kind, a, i) {
@@ -454,7 +519,7 @@ CH.Screens = (function () {
   function redeem() {
     const s = save();
     const got = (CH.REDEEM_CODES || []).filter(c => s.redeemed.includes(c.hash));
-    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '');
+    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '') + (rw.skins ? rw.skins.map(k => { const [kind, id, h] = String(k).split(':'); return '<span class="chip">Skin: ' + (CH.SKINS[id] ? CH.SKINS[id].name : id) + (h && CH.HEROES[h] ? ' (' + CH.HEROES[h].name + ')' : kind === 'castle' ? ' (castle)' : '') + '</span>'; }).join('') : '');
     return {
       title: 'Redeem code',
       html: '<div class="redeem panel"><label class="label" for="rcode">Enter a gift code</label>' +
@@ -513,5 +578,5 @@ CH.Screens = (function () {
     };
   }
 
-  return { store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
+  return { ranks, skins, store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
 })();

@@ -314,7 +314,12 @@ CH.Art = (function () {
     if (o.ghost) c.globalAlpha = 0.65;
     if (d.cat === 'wall') wall(c, x, y, L, o.links || 0, b.type === 'gate', time);
     else if (d.cat === 'trap') { if (!o.hidden) trap(c, x, y, b.type, L, o.armed !== false); }
-    else if (BLD[b.type]) BLD[b.type](c, x, y, s, L, d, time, o);
+    else if (BLD[b.type]) {
+      if (o.skin && o.skin !== 'classic' && CH.SKINS[o.skin]) skinned(c, o.skin, x - 12, y - 56, s + 24, s + 64, cc => BLD[b.type](cc, x, y, s, L, d, time, o), time, x + s / 2, y + s / 2 - 12, s * 0.7);
+      else BLD[b.type](c, x, y, s, L, d, time, o);
+      if (o.burning) fireFx(c, x + s / 2, y + s * 0.55, s * 0.32, time);
+      else if (o.smoking) smokeFx(c, x + s / 2, y + s * 0.2, s * 0.3, time);
+    }
     if (o.constructing) {
       c.globalAlpha = 0.85;
       c.strokeStyle = '#c8a060'; c.lineWidth = 2;
@@ -493,6 +498,55 @@ CH.Art = (function () {
     if (big) glow(c, s * 1.85, -s * 1.75, s * 0.5, '255,140,40', 0.4 + 0.3 * Math.abs(f));
   }
 
+  /* ---------------- Skins & world effects ---------------- */
+  let skinCv = null;
+  /** Draws `draw` recoloured with a skin theme, then adds its aura and particles. */
+  function skinned(c, id, bx, by, bw, bh, draw, time, cx, cy, r) {
+    const sk = CH.SKINS[id], K = 2.5;
+    if (!skinCv) skinCv = document.createElement('canvas');
+    const w = Math.ceil(bw * K), h = Math.ceil(bh * K);
+    if (skinCv.width < w || skinCv.height < h) { skinCv.width = Math.max(w, skinCv.width); skinCv.height = Math.max(h, skinCv.height); }
+    const o = skinCv.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, skinCv.width, skinCv.height);
+    o.setTransform(K, 0, 0, K, -bx * K, -by * K);
+    draw(o);
+    o.globalCompositeOperation = 'source-atop'; o.fillStyle = sk.tint; o.fillRect(bx, by, bw, bh); o.globalCompositeOperation = 'source-over';
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(c, cx, cy, r * 1.25, sk.aura, 0.22 + Math.sin(time * 2) * 0.05); c.restore();
+    c.drawImage(skinCv, 0, 0, w, h, bx, by, bw, bh);
+    skinParticles(c, sk.fx, cx, cy, r, time);
+  }
+  function skinParticles(c, fx, cx, cy, r, time) {
+    for (let i = 0; i < 7; i++) {
+      const ph = (time * 0.35 + i / 7) % 1, a = i * 2.39;
+      const x = cx + Math.cos(a) * r * (0.4 + 0.5 * ((i * 37) % 10) / 10), y = cy + r * 0.6 - ph * r * 1.8;
+      c.globalAlpha = Math.sin(ph * Math.PI) * 0.9;
+      if (fx === 'light') { circle(c, x, y, 1.6, '#fff6c8'); circle(c, x, y, 3.5, 'rgba(255,240,170,0.35)'); }
+      else if (fx === 'ember') circle(c, x, y, 1.5 + (i % 2), i % 2 ? '#ffb347' : '#ff5a1f');
+      else if (fx === 'shadow') circle(c, x + Math.sin(time * 3 + i) * 3, y, 3 + (i % 3), 'rgba(120,60,200,0.45)');
+      else if (fx === 'leaf') { const ly = cy - r + ph * r * 1.8; ell(c, x + Math.sin(time * 2 + i) * 4, ly, 2.6, 1.4, i % 2 ? '#6fbf4a' : '#a8d85a'); }
+    }
+    c.globalAlpha = 1;
+  }
+  /** Burning: the castle was defeated. */
+  function fireFx(c, x, y, r, time) {
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(c, x, y, r * 1.6, '255,110,30', 0.35 + Math.sin(time * 9) * 0.06); c.restore();
+    for (let i = 0; i < 6; i++) {
+      const fx = x + (i - 2.5) * r * 0.32, f = Math.sin(time * 11 + i * 1.7), h = r * (0.7 + 0.35 * f + (i % 2) * 0.3);
+      poly(c, [fx - r * 0.18, y, fx + Math.sin(time * 7 + i) * r * 0.08, y - h, fx + r * 0.18, y], i % 2 ? '#ff7a1a' : '#ffb02e');
+      poly(c, [fx - r * 0.08, y, fx, y - h * 0.55, fx + r * 0.08, y], '#fff1a0');
+    }
+    smokeFx(c, x, y - r * 0.8, r * 0.9, time, 0.55);
+  }
+  /** Smoking: the castle survived an attack. */
+  function smokeFx(c, x, y, r, time, alpha = 0.45) {
+    for (let i = 0; i < 6; i++) {
+      const ph = (time * 0.25 + i / 6) % 1;
+      c.globalAlpha = (1 - ph) * alpha;
+      circle(c, x + Math.sin(i * 2 + time) * r * 0.3 + ph * r * 0.4, y - ph * r * 2.2, r * (0.3 + ph * 0.6), i % 2 ? '#6a6a70' : '#8a8a90');
+    }
+    c.globalAlpha = 1;
+  }
+
   /** Draw a battle unit. `mine` = belongs to the player (blue ring) vs hostile (red ring). */
   function drawUnit(c, u, mine, time) {
     const s = u.size;
@@ -505,7 +559,9 @@ CH.Art = (function () {
     if (u.rageT > 0) glow(c, 0, -s, s * 1.6, '255,60,120', 0.35);
     c.translate(0, lift);
     c.save(); c.scale(u.facing, 1);
-    (UNIT[u.def.sprite] || UNIT.swordsman)(c, s, u.anim, { swing: u.swing > 0 ? u.swing : 0, friendly: mine });
+    const paint = cc => (UNIT[u.def.sprite] || UNIT.swordsman)(cc, s, u.anim, { swing: u.swing > 0 ? u.swing : 0, friendly: mine });
+    if (u.skin && u.skin !== 'classic' && CH.SKINS[u.skin]) skinned(c, u.skin, -s * 2.6, -s * 3.6, s * 5.2, s * 4.4, paint, time, 0, -s, s * 1.4);
+    else paint(c);
     c.restore();
     if (u.hit > 0) { c.globalCompositeOperation = 'lighter'; glow(c, 0, -s, s * 1.3, '255,255,255', 0.45); c.globalCompositeOperation = 'source-over'; }
     if (u.slowT > 0) { c.beginPath(); c.ellipse(0, -1, s * 0.9, s * 0.3, 0, 0, TAU); c.strokeStyle = 'rgba(140,210,255,0.9)'; c.lineWidth = 2; c.stroke(); }
@@ -545,5 +601,5 @@ CH.Art = (function () {
     drawBuilding(ctx, { type, level, tx: 0, ty: 0 }, { time: 1, links: CH.BUILDINGS[type].cat === 'wall' ? 5 : 0, fill: 0.7 });
   }
 
-  return { drawBuilding, drawUnit, unitIcon, buildingIcon, glow, circle, ell, rect, poly, line, rrect, tierOf };
+  return { drawBuilding, drawUnit, unitIcon, buildingIcon, glow, circle, ell, rect, poly, line, rrect, tierOf, skinned, skinParticles, fireFx, smokeFx };
 })();

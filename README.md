@@ -109,6 +109,42 @@ Battles involving you run on the full **deterministic battle engine**:
 - **Your raids:** you can't hit the same kingdom again for 30 minutes, and you can only take a share of its unprotected resources. Attacking or scouting a kingdom drops your own shield.
 - **Offline:** catch-up is capped at 12 hours and at most 2 attacks on you resolve while you're away. On return you get a "While you were away" summary with resources, your reports and the realm's news.
 
+### The Throne of Eldoria: Aurelion Citadel
+- **Location:** a gleaming citadel at the centre of the world, in the heart of Dragon Territory.
+- **The war:** every **Saturday at 15:00 (device time)** the **Throne War** opens for **30 minutes**. A gold banner shows the time left and who holds the Citadel.
+- **Holding it:** the Citadel starts the war held by its Guardians. Whoever takes it garrisons it with their surviving troops and starts a hold clock; losing it stops the clock.
+- **Attackers:** all AI kingdoms join in, alone or in faction **rallies**. You can attack, rally, or reinforce your own garrison.
+- **Becoming king:** the contender with the **longest total hold time** becomes **King of Eldoria** for one week, from Saturday to Saturday, and gains +10% production.
+- **The treasure:** the king hands out what is prepared in the Citadel: 1 Royal Treasure, 3 Noble Chests and 6 Knight Chests, through the **Royal Court**.
+  - The king may keep one chest of each kind.
+  - Kingdoms that receive a chest stay loyal and won't attack the king during the reign.
+  - An AI king shares the treasure with its faction, and you receive a chest if you're in that faction.
+- **Battles at the Citadel** that involve you use the full battle engine on its fortifications, with reports and replays.
+
+### Rallies
+When you attack a kingdom, fort or the Citadel and you belong to a faction, you can start a **rally**.
+- **Who joins:** up to 9 nearby allies (10 castles in total) each lend 40% of their troops.
+- **Timing:** the rally gathers for 60 seconds, then marches as one army.
+- **Afterwards:** survivors are shared back by contribution.
+- **AI factions** rally on the Citadel too.
+
+### Leaderboards
+**More → Leaderboards** has four tabs:
+- **Power:** all 61 kingdoms, including you.
+- **Factions:** total power, members and kills.
+- **Killers:** enemy troops killed across all battles.
+- **Throne:** the current king, live or last-war hold times, the war's top killers, and past kings.
+
+### Battle scars on the world map
+A castle that was **defeated burns**, and one that **survived an attack smokes**, for several minutes. This applies to AI kingdoms, your kingdom (also visible on your home screen) and the Citadel.
+
+### Skins (More → Skins)
+Four themes for your **castle** and **every hero**: **Dunia** (Verdant Crown), **Surgawi** (Celestial Sanctum), **Neraka** (Infernal Bastion) and **Kegelapan** (Abyssal Throne).
+- **Where they show:** castle skins appear in your kingdom, on the world map and when you are attacked; hero skins appear in every battle.
+- **What they look like:** each theme recolours the art and adds its own aura and particles (light motes, embers, shadow wisps, falling leaves).
+- **Cosmetic only:** skins don't change stats.
+- **Price:** castle 400–900 gems, hero 250–500 gems.
+
 ### Other systems
 - **Campaign:** 36 stages across 6 regions, carried over from Crownhold.
 - **Bag items:** speed-ups (5 minutes, 1 hour), Peace Shields (2 hours, 8 hours), random and advanced teleports, and resource chests.
@@ -124,6 +160,7 @@ Battles involving you run on the full **deterministic battle engine**:
 | Speed-up 5m / 1h | 10 / 60 gems |
 | Peace Shield 2h / 8h | 80 / 200 gems |
 | Random / Advanced Teleport | 100 / 300 gems |
+| Extra march slot (up to 5 marches in total) | 300, 600, 1,200… gems |
 
   Bought resources may exceed storage. Edit prices in `CH.GEM_SHOP` in `defs.js`.
 - **Gathering:** send troops to a resource tile; they gather up to their load, then march home. Resources your marches carry home (gathered or looted) are always kept in full, even above storage limits.
@@ -146,6 +183,7 @@ js/data/defs.js       config, buildings, 22 troops, heroes, items, techs, enemie
 js/data/content.js    campaign, base-layout generator (used for AI kingdoms), starting kingdom
 js/data/codes.js      redeem codes (hashed) + hash function
 js/core/state.js      your kingdom: economy, food, training, infirmary, items, research, power, save/validate
+js/core/throne.js     the Aurelion Citadel: weekly Throne War, rallies, coronation, Royal Court, leaderboards
 js/core/world.js      Eldoria: generation, AI simulation, marches, battles, reports, events, factions, teleport, offline catch-up
 js/core/audio.js      synthesized sound and music
 js/game/battle.js     battle engine (siege, raid, defense and campaign modes)
@@ -155,7 +193,7 @@ js/render/view.js     kingdom and battle renderer, camera
 js/render/worldview.js world map renderer
 js/ui/*.js            HUD, screens, world map UI, battle HUD
 js/main.js            app flow, game loop, offline summary
-tests/                run_tests.js (33 logic tests), browser_test.py (45 checks)
+tests/                run_tests.js (39 logic tests), browser_test.py (45 checks), throne_test.py (18 checks)
 tools/                build.py (single file), codegen.js (redeem codes)
 ```
 
@@ -166,10 +204,10 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **New troop:** add a `TR({...})` entry to `CH.TROOPS` (class, tier, building, unlock level, stats, load, cost, time, upkeep, sprite) and draw its sprite in `UNIT` in `art.js`. Training, research, counters, marches and AI armies pick it up automatically.
 - **New world event:** add it to `CH.EVENTS` in `world.js` and check it where it matters with `evOn(w, T, 'yourId')`, as `resourceRush` does in gathering and `dragonHunt` does in `processUntil`.
 - **New monster camp type:** add it to `CH.CAMP_TYPES` with a biome and enemy unit list, and give it a color in `WorldView.camp`.
-- **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 hero=elara expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`. Rewards can be resources (gold, wood, stone, food, gems, runes), player XP, any of the 22 troop types, any of the 10 bag items, and hero unlocks. Conditions: `start=`, `expires=` and `minCastle=`.
+- **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 hero=elara expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`. Rewards can be resources (gold, wood, stone, food, gems, runes), player XP, any of the 22 troop types, any of the 10 bag items, hero unlocks (`hero=elara`) and skins (`skin=castle:celestial`, `skin=hero:infernal:aldric`). Conditions: `start=`, `expires=` and `minCastle=`.
 
 ## Testing
-`node tests/run_tests.js`: 33 logic tests.
+`node tests/run_tests.js`: 39 logic tests, including the Throne War schedule, a full war with AI rallies and coronation, player rallies, the Royal Court, march slots and skins.
 - Economy: production caps, food upkeep and desertion, batch training, the infirmary, items, techs and redeem codes.
 - Combat rules: counters and siege multipliers.
 - The world: generation, AI growth and AI-vs-AI wars, and the fairness rules (beginner protection, shields turning armies back, warning time).
@@ -183,6 +221,8 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **Gathering:** the full loop through the real dialog (march out, gather, march home, resources added).
 - **Shop and factions:** buying resources and items with gems, joining and leaving a faction.
 - **Other systems:** teleport, redeem, nine screens, persistence after reload, and phone portrait and landscape layouts. It also checks for console errors.
+
+`python3 tests/throne_test.py`: 18 checks. It shifts the page clock to Saturday 15:02, then checks the war banner, the Citadel panel, a rally with up to 9 allies, the Citadel battle report, burning and smoking castles, the coronation after 30 minutes, every leaderboard tab, the Royal Court, buying skins and march slots, and that there are no console errors.
 
 **Balance** was checked by simulation. A modest castle-3 player across six seeded worlds over 6 in-game hours sees 0–5 attacks and wins most defenses, though defending still costs troops. AI-vs-AI wars produce dozens of news items per hour.
 
@@ -199,5 +239,5 @@ Worth checking by hand on real devices: touch feel on the world map, audio on iO
 - **AI kingdoms don't gather resource tiles** or attack your gathering troops. Their economy is abstracted.
 - **No persistent battle damage:** buildings are never left damaged after a defense. A loss costs resources and troops.
 - **Balance comes from simulations,** not human playtesting. Timers are short, prototype-paced.
-- **No real multiplayer or player guilds.** Factions and their reinforcements are simulated.
+- **No real multiplayer or player guilds.** Factions, their reinforcements and rallies are simulated. The Throne War follows each player's own device clock.
 - **Tested in headless Chromium only.**

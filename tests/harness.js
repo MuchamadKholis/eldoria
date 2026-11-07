@@ -1,7 +1,7 @@
 /* Loads Crownhold's DOM-free logic into a Node VM (window === global). */
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['js/data/defs.js', 'js/data/content.js', 'js/data/codes.js', 'js/core/state.js', 'js/game/battle.js', 'js/game/siege.js', 'js/core/world.js'];
+const FILES = ['js/data/defs.js', 'js/data/content.js', 'js/data/codes.js', 'js/core/state.js', 'js/game/battle.js', 'js/game/siege.js', 'js/core/world.js', 'js/core/throne.js'];
 function loadGame() {
   const store = new Map();
   const sb = { console, localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) } };

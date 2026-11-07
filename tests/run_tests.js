@@ -254,6 +254,61 @@ test('save/load keeps the world, marches, reports and items; hostile data is cle
   sb.localStorage.setItem(CH.CONFIG.SAVE_KEY, '{nope'); ok(S.load().res.food === CH.CONFIG.START_RES.food);
 });
 
+console.log('\nThrone of Eldoria');
+const SAT = new Date(2026, 10, 7, 15, 0, 0).getTime(); // a Saturday, 15:00 local
+test('the Throne War runs every Saturday 15:00 for 30 minutes; the reign lasts one week', () => {
+  const w1 = CH.Throne.warWindow(SAT + 5 * MIN), w2 = CH.Throne.warWindow(SAT + 31 * MIN), w3 = CH.Throne.warWindow(SAT - MIN);
+  ok(w1.active && w1.start === SAT && w1.end === SAT + 30 * MIN && !w2.active && !w3.active);
+  ok(new Date(w1.next).getDay() === 6 && new Date(w1.next).getHours() === 15 && Math.abs(w1.next - SAT - 7 * 864e5) < 2 * 3600e3);
+});
+test('the Citadel sits at the centre with nothing built around it', () => {
+  const s = fresh(), th = s.world.throne;
+  ok(th && th.x === 48 && th.y === 48);
+  ok(![...s.world.kingdoms, ...s.world.camps, ...s.world.tiles].some(o => Math.hypot(o.x - 48, o.y - 48) < 6));
+  S.castle(s).level = 6; ok(Wd.canTeleport(s, 50, 50) === 'Too close to something else');
+});
+test('a full war: AIs attack and rally, the longest holder is crowned, an AI king shares the treasure', () => {
+  const s = fresh(SAT - 5 * MIN); s.shieldUntil = SAT + 1e9;
+  let t = SAT - 5 * MIN; for (let i = 0; i < 40 * 4; i++) { t += 15000; Wd.tick(s, t); }
+  const th = s.world.throne;
+  ok(th.war && th.war.ended && th.war.attacks > 5, 'attacks ' + (th.war && th.war.attacks));
+  ok(s.world.news.some(n => n.text.includes('leads a rally')), 'no AI rally');
+  const best = Object.entries(th.war.hold).sort((a, b) => b[1] - a[1])[0];
+  ok(th.king && th.king.key === best[0] && th.king.until === CH.Throne.warWindow(SAT).next, 'king');
+  ok(th.prizes.every(p => p.given), 'prizes not handed out');
+  ok(!Wd.sendMarch(s, 'attack', { type: 'throne', id: 'throne' }, { swordsman: 10 }, null, 'surround', t).ok, 'citadel closed after the war');
+});
+test('player rally: allies lend troops (max 10 castles) and get survivors back', () => {
+  const s = fresh(SAT + MIN); s.world.throne.war = null; Wd.tick(s, SAT + 2 * MIN);
+  s.buildings.push({ id: 901, type: 'embassy', level: 1, tx: 0, ty: 0, buf: 0, job: null }); Wd.joinFaction(s, 0, SAT + 2 * MIN);
+  s.army = { knight: 3000, longbowman: 2000 };
+  const r = Wd.sendMarch(s, 'attack', { type: 'throne', id: 'throne' }, { ...s.army }, 'aldric', 'surround', SAT + 2 * MIN, { rally: true });
+  ok(r.ok && r.march.allies.length >= 1 && r.march.allies.length <= 9, r.reason);
+  ok(r.march.allies.every(a => s.world.kingdoms.find(k => k.id === a.id).out));
+  advance(s, SAT + 2 * MIN, 900);
+  ok(s.reports.some(x => x.title.includes('Citadel')), 'no citadel report');
+});
+test('player king hands out prizes: one of each kind for yourself, recipients become loyal', () => {
+  const s = fresh(); const th = s.world.throne;
+  th.king = { key: 'player', name: 'Me', f: null, since: T0, until: T0 + 7 * 864e5, held: 1 };
+  const g = s.res.gems;
+  ok(CH.Throne.distribute(s, 'royal0', 'player', T0).ok && s.res.gems === g + 1000);
+  ok(CH.Throne.distribute(s, 'knight0', 'player', T0).ok && !CH.Throne.distribute(s, 'knight1', 'player', T0).ok);
+  const k = s.world.kingdoms[0]; k.grudge = 3;
+  ok(CH.Throne.distribute(s, 'knight1', k.id, T0).ok && k.grudge === 0 && k.friendUntil === T0 + 7 * 864e5);
+  ok(Math.abs(S.prodMult(s) - 1.1) < 1e-9 || CH.Throne.isPlayerKing(s) === false);
+});
+test('march slots can be bought up to 5; skins are bought, equipped and saved', () => {
+  const s = fresh(); s.res.gems = 1e5;
+  while (S.buyMarchSlot(s).ok);
+  ok(S.marchSlots(s) === 5 && !S.buyMarchSlot(s).ok);
+  ok(S.buySkin(s, 'castle', 'abyssal').ok && s.equipped.castle === 'abyssal' && !S.buySkin(s, 'castle', 'abyssal').ok);
+  ok(S.buySkin(s, 'hero', 'infernal', 'aldric').ok && S.heroSkin(s, 'aldric') === 'infernal' && S.equipSkin(s, 'castle', 'classic'));
+  ok(!S.equipSkin(s, 'castle', 'celestial'), 'equipped an unowned skin');
+  const v = S.validate(JSON.parse(JSON.stringify(s)));
+  ok(v.skins.castle.includes('abyssal') && v.equipped.hero.aldric === 'infernal' && v.extraMarch === s.extraMarch);
+});
+
 console.log('\nBattle engine (pathfinding)');
 const mini = layout => ({ id: 'x', name: 'Test', cl: 1, layout, loot: { gold: 1000, wood: 1000, stone: 600, gems: 0 } });
 function walledBase(gap) {
