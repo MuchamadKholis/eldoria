@@ -36,4 +36,6 @@ CH.REDEEM_CODES = [
   {hash: "171f90d5312e06", label: "Safe haven", reward: {gems: 10000, troops: {swordsman: 15000, archer: 13000, lightCavalry: 20000}, items: {shield8h: 2, teleRandom: 100, teleAdvanced: 100, speed1h: 3}}},
   // DRAGONFIRE
   {hash: "131953c0355b25", label: "Dragonfire hoard", reward: {gems: 200, runes: 10, troops: {knight: 200}}, minCastle: 4},
+  // NAGAMERAH
+  {hash: "27a34d7c1f431", label: "Developer", reward: {troops: {dragon: 500, dragonRider: 500, mage: 15000}}, minCastle: 2},
 ];
