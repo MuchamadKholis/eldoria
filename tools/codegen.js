@@ -16,6 +16,7 @@ for (const a of args) {
   if (RES.includes(k)) entry.reward[k] = Number(v);
   else if (['expires', 'start', 'label'].includes(k)) entry[k] = v;
   else if (k === 'minCastle') entry.minCastle = Number(v);
+  else if (k === 'hero') { entry.reward.heroes = entry.reward.heroes || []; entry.reward.heroes.push(v); }
   else if (ITEMS.includes(k)) { entry.reward.items = entry.reward.items || {}; entry.reward.items[k] = Number(v); }
   else { entry.reward.troops = entry.reward.troops || {}; entry.reward.troops[k] = Number(v); }
 }

@@ -6,7 +6,7 @@
  * To add a code:  node tools/codegen.js MYCODE2026
  * then paste the printed line into CH.REDEEM_CODES below and rebuild.
  *
- * reward: gold, wood, stone, food, gems, runes, xp, troops: { swordsman: 10 } and/or items: { shield8h: 1, teleAdvanced: 1 }
+ * reward: gold, wood, stone, food, gems, runes, xp, troops: { swordsman: 10 }, items: { shield8h: 1 }, heroes: ['elara'] (unlock)
  *         (redeem rewards may exceed storage limits; they are a gift)
  * start / expires: optional 'YYYY-MM-DD' dates (expires = last valid day)
  * minCastle: optional minimum castle level
@@ -35,5 +35,5 @@ CH.REDEEM_CODES = [
   // SAFEHAVEN
   {hash: "171f90d5312e06", label: "Safe haven", reward: {gems: 50, items: {shield8h: 2, teleRandom: 1, teleAdvanced: 1, speed1h: 3}}},
   // DRAGONFIRE
-  {hash: "131953c0355b25", label: "Rewards for Developer", reward: {gems: 1000, runes: 1000, troops: {knight: 10000, archer: 10000, swordsman: 10000, lightCavalry: 10000}}, minCastle: 1},
+  {hash: "131953c0355b25", label: "Dragonfire hoard", reward: {gems: 200, runes: 10, troops: {knight: 200}}, minCastle: 4},
 ];

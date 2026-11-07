@@ -114,6 +114,20 @@ Battles involving you run on the full **deterministic battle engine**:
 - **Bag items:** speed-ups (5 minutes, 1 hour), Peace Shields (2 hours, 8 hours), random and advanced teleports, and resource chests.
 - **Academy technologies:** Prosperity, Logistics, Fortification, Medicine, Scouting, Warfare and Agriculture.
 - **Trading Post:** exchange one resource for another at 30–58%, depending on its level.
+- **Gem Shop** (More → Gem Shop, or tap your gem counter):
+
+| Item | Price |
+|---|---|
+| Gold, wood or stone: 5,000 / 25,000 / 100,000 | 20 / 90 / 320 gems |
+| Food: 7,500 / 37,500 / 150,000 | 20 / 90 / 320 gems |
+| Fill one storage to capacity | 1 gem per 300 missing |
+| Speed-up 5m / 1h | 10 / 60 gems |
+| Peace Shield 2h / 8h | 80 / 200 gems |
+| Random / Advanced Teleport | 100 / 300 gems |
+
+  Bought resources may exceed storage. Edit prices in `CH.GEM_SHOP` in `defs.js`.
+- **Gathering:** send troops to a resource tile; they gather up to their load, then march home. Resources your marches carry home (gathered or looted) are always kept in full, even above storage limits.
+- **Factions** can be left at any time from the Factions screen; you can join one again after 1 hour.
 - **Redeem codes** (More → Redeem code):
 
 | Code | Contents |
@@ -141,7 +155,7 @@ js/render/view.js     kingdom and battle renderer, camera
 js/render/worldview.js world map renderer
 js/ui/*.js            HUD, screens, world map UI, battle HUD
 js/main.js            app flow, game loop, offline summary
-tests/                run_tests.js (29 logic tests), browser_test.py (36 checks)
+tests/                run_tests.js (33 logic tests), browser_test.py (45 checks)
 tools/                build.py (single file), codegen.js (redeem codes)
 ```
 
@@ -152,20 +166,22 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **New troop:** add a `TR({...})` entry to `CH.TROOPS` (class, tier, building, unlock level, stats, load, cost, time, upkeep, sprite) and draw its sprite in `UNIT` in `art.js`. Training, research, counters, marches and AI armies pick it up automatically.
 - **New world event:** add it to `CH.EVENTS` in `world.js` and check it where it matters with `evOn(w, T, 'yourId')`, as `resourceRush` does in gathering and `dragonHunt` does in `processUntil`.
 - **New monster camp type:** add it to `CH.CAMP_TYPES` with a biome and enemy unit list, and give it a color in `WorldView.camp`.
-- **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`.
+- **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 hero=elara expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`. Rewards can be resources (gold, wood, stone, food, gems, runes), player XP, any of the 22 troop types, any of the 10 bag items, and hero unlocks. Conditions: `start=`, `expires=` and `minCastle=`.
 
 ## Testing
-`node tests/run_tests.js`: 29 logic tests.
+`node tests/run_tests.js`: 33 logic tests.
 - Economy: production caps, food upkeep and desertion, batch training, the infirmary, items, techs and redeem codes.
 - Combat rules: counters and siege multipliers.
 - The world: generation, AI growth and AI-vs-AI wars, and the fairness rules (beginner protection, shields turning armies back, warning time).
 - Your actions: defense battles with reports and recovery shields, scouting detail by tech, raids with loot, cooldowns and grudges, monster camps respawning, gathering and recall, march slots, teleport rules, factions and events.
 - Reliability: the offline cap, replay determinism, save/load with hostile data, and pathfinding through and around walls.
 
-`python3 tests/browser_test.py`: 36 checks with real clicks.
+`python3 tests/browser_test.py`: 45 checks with real clicks.
 - **Kingdom:** placing a building, batch training, army tabs.
 - **World map:** tapping a kingdom, scouting, the march dialog with formation, the marches drawer, reports, and watching a replay.
 - **Being attacked:** the incoming banner and warning, the defense battle with its report, and the recovery shield.
+- **Gathering:** the full loop through the real dialog (march out, gather, march home, resources added).
+- **Shop and factions:** buying resources and items with gems, joining and leaving a faction.
 - **Other systems:** teleport, redeem, nine screens, persistence after reload, and phone portrait and landscape layouts. It also checks for console errors.
 
 **Balance** was checked by simulation. A modest castle-3 player across six seeded worlds over 6 in-game hours sees 0–5 attacks and wins most defenses, though defending still costs troops. AI-vs-AI wars produce dozens of news items per hour.

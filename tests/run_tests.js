@@ -172,6 +172,8 @@ test('gathering brings resources home; recall returns troops early', () => {
   ok(Wd.sendMarch(s, 'gather', { type: 'tile', id: tile.id }, { lightCavalry: 100 }, null, null, T0).ok);
   advance(s, T0, 3600);
   ok(s.res[tile.type] > 1000, 'nothing gathered');
+  ok(!s.world.marches.some(m => m.owner === 'player'), 'gatherers did not come home');
+  ok(s.reports.some(r => r.kind === 'gather'), 'no gather report');
   const k = nearest(s, s.world.kingdoms).find(x => x.sh < T0 + 4000e3 && x.tcd < T0 + 4000e3);
   const r = Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { archer: 10 }, null, 'surround', T0 + 4000e3);
   ok(Wd.recall(s, r.march.id, T0 + 4000e3 + 5000) && s.world.marches.some(m => m.kind === 'return' && m.owner === 'player'));
@@ -195,6 +197,27 @@ test('factions: join needs an Embassy, allies are protected, reinforcements have
   const ally = s.world.kingdoms.find(k => k.f === 1);
   ok(Wd.sendMarch(s, 'attack', { type: 'kingdom', id: ally.id }, { archer: 5 }, null, 'surround', T0).reason.includes('own faction'));
   ok(Wd.requestHelp(s, T0).ok && !Wd.requestHelp(s, T0 + 60000).ok);
+});
+test('leaving a faction removes its protection and blocks rejoining for an hour', () => {
+  const s = fresh(); s.buildings.push({ id: 901, type: 'embassy', level: 1, tx: 0, ty: 0, buf: 0, job: null });
+  ok(Wd.joinFaction(s, 0, T0).ok && Wd.leaveFaction(s, T0 + 1000).ok && s.faction === null);
+  ok(!Wd.leaveFaction(s, T0 + 2000).ok && !Wd.joinFaction(s, 1, T0 + 2000).ok && Wd.joinFaction(s, 1, T0 + 3700e3).ok);
+});
+test('gathered cargo is kept in full even above storage limits', () => {
+  const s = fresh(), w = s.world; s.res.wood = S.capacity(s, 'wood');
+  w.marches.push({ id: 'mr', owner: 'player', kind: 'return', fx: 1, fy: 1, tx: w.px, ty: w.py, t0: T0, t1: T0 + 1000, army: { lightCavalry: 10 }, cargo: { wood: 5000 }, target: { type: 'home' } });
+  Wd.tick(s, T0 + 2000); ok(s.res.wood === S.capacity(s, 'wood') + 5000);
+});
+test('gem shop: resource packs, fill-to-capacity and items', () => {
+  const s = fresh(); s.res.gems = 1000;
+  const f = s.res.food; ok(S.buy(s, 'res', 'food', 0).ok && s.res.food === f + 7500 && s.res.gems === 980);
+  ok(S.buy(s, 'item', 'teleRandom').ok && s.items.teleRandom === 2);
+  s.res.gold = 0; const price = S.shopPrice(s, 'fill', 'gold'); ok(S.buy(s, 'fill', 'gold').ok && s.res.gold === S.capacity(s, 'gold'));
+  ok(!S.buy(s, 'fill', 'gold').ok); s.res.gems = 0; ok(!S.buy(s, 'res', 'gold', 2).ok);
+});
+test('redeem codes can unlock heroes', () => {
+  const s = fresh(); CH.REDEEM_CODES.push({ hash: CH.hashCode('HEROTEST'), reward: { heroes: ['elara'] } });
+  ok(S.redeem(s, 'herotest', T0).ok && s.heroes.elara.unlocked); CH.REDEEM_CODES.pop();
 });
 test('world events rotate through all six and the dragon hunt spawns a boss', () => {
   const s = fresh(); s.shieldUntil = T0 + 1e9;

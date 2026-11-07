@@ -24,6 +24,7 @@ CH.Home = (function () {
       if (e.target.closest('#hud-player')) UI.sheet('profile');
       else if (e.target.closest('#hud-settings')) UI.sheet('settings');
       else if (e.target.closest('#hud-mail')) UI.sheet('mail');
+      else if (e.target.closest('[data-res="gems"]')) UI.sheet('store');
       else if (e.target.closest('[data-res]')) UI.sheet('resources');
     };
     $('dock').innerHTML =
@@ -57,7 +58,7 @@ CH.Home = (function () {
   }
   function moreMenu() {
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['mail', 'map', 'Reports'], ['bag', 'gems', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
+      [['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['redeem', 'gems', 'Redeem code'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
     { onClick: e => { const b = e.target.closest('[data-more]'); if (b) { UI.closeModal(); UI.sheet(b.dataset.more); } } });

@@ -360,7 +360,9 @@
     if (m.kind === 'return') {
       if (m.owner === 'player') {
         for (const t in m.army) s.army[t] = (s.army[t] || 0) + m.army[t];
-        const got = CH.State.give(s, m.cargo || {});
+        // Cargo carried home (gathering, loot) is always kept in full, even above storage limits.
+        const got = {};
+        for (const r in m.cargo || {}) if (m.cargo[r] > 0) { s.res[r] = (s.res[r] || 0) + m.cargo[r]; got[r] = Math.floor(m.cargo[r]); }
         if (m.cargo && Object.values(m.cargo).some(n => n > 0)) ev.push({ kind: 'returned', cargo: got });
       } else if (owner) {
         for (const t in m.army) owner.tr[t] = (owner.tr[t] || 0) + m.army[t];
@@ -374,7 +376,9 @@
       const tile = w.tiles.find(t => t.id === m.target.id);
       const took = Math.min(m.gatherAmt, tile ? tile.amt : 0);
       if (tile) { tile.amt -= took; tile.by = null; if (tile.amt <= 0) { tile.amt = Math.round(4000 * Math.pow(tile.lvl, 1.5)); } }
-      returnMarch(w, { ...m, t0: m.arrivedAt, t1: m.arrivedAt + (m.travel || 30000) }, T, m.army, { [tile ? tile.type : 'food']: took });
+      // Head home from the tile (the castle may have teleported meanwhile).
+      w.marches.push({ id: 'm' + w.nextId++, owner: 'player', kind: 'return', fx: m.tx, fy: m.ty, tx: w.px, ty: w.py, t0: T, t1: T + (m.travel || 30000),
+        army: m.army, hero: m.hero, heroLevel: m.heroLevel, cargo: { [tile ? tile.type : 'food']: took }, target: { type: 'home' } });
       addReport(s, { t: T, kind: 'gather', title: 'Gathered ' + U.fmt(took) + ' ' + (tile ? tile.type : ''), outcome: 'win', coords: [m.tx, m.ty] });
       ev.push({ kind: 'report', report: s.reports[0] });
       return;
@@ -600,7 +604,7 @@
     if (reward.gems) s.res.gems += reward.gems;
     if (reward.runes) s.res.runes += reward.runes;
     if (hero && tgt.type !== 'camp' && tgt.type !== 'ruin') heroXp(s, hero.id, 40 + armyPower(sum.def.lost) / 30);
-    if (armyCount(m.army)) returnMarch(w, m, T, m.army, loot); else if (Object.keys(loot).length) CH.State.give(s, loot);
+    if (armyCount(m.army)) returnMarch(w, m, T, m.army, loot);
     const rep = addReport(s, {
       t: T, kind: tgt.type === 'kingdom' || tgt.type === 'fort' ? 'attack' : 'monster', you: 'atk', outcome: sum.outcome,
       title: (sum.outcome === 'win' ? 'Victory at ' : sum.outcome === 'partial' ? 'Partial victory at ' : 'Defeat at ') + defender.name,
@@ -795,9 +799,16 @@
   function joinFaction(s, f, now = Date.now()) {
     if (!CH.State.highestLevel(s, 'embassy')) return { ok: false, reason: 'Build an Embassy first' };
     if (s.faction === f) return { ok: false, reason: 'Already a member' };
-    if (s.faction != null && now - s.factionChangedAt < 60 * MIN) return { ok: false, reason: 'You can change factions once per hour' };
+    if (s.factionChangedAt && now - s.factionChangedAt < 60 * MIN) return { ok: false, reason: 'You can join a faction again in ' + U.time((60 * MIN - (now - s.factionChangedAt)) / 1000) };
     s.faction = f; s.factionChangedAt = now;
     return { ok: true };
+  }
+  function leaveFaction(s, now = Date.now()) {
+    if (s.faction == null) return { ok: false, reason: 'You are not in a faction' };
+    const old = CH.FACTIONS[s.faction].name;
+    s.faction = null; s.factionChangedAt = now; s.helpUntil = 0;
+    news(W(s), now, s.player.name + ' left the ' + old + '.', 'world');
+    return { ok: true, old };
   }
   function incoming(s) { return W(s) ? W(s).marches.filter(m => m.kind === 'attack' && m.target.type === 'player') : []; }
   function power(k) { return Math.round(aiDefPower(k)); }
@@ -816,7 +827,7 @@
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
-    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
+    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
     territoryBonus, onShield, findAny, campMonsters, campRewards, dist, N, heroXp, PKEYS,
   };
 })();

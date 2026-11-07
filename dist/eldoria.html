@@ -513,6 +513,12 @@ body.in-world .hud, body.in-world .sidebar, body.in-world .dock, body.in-world .
   .alert { font-size: 0.8rem; padding: 6px 12px; top: calc(env(safe-area-inset-top, 0px) + 92px); }
 }
 
+/* Gem shop */
+.store-card { display: flex; flex-direction: column; gap: 10px; }
+.store-btns { display: flex; flex-direction: column; gap: 6px; }
+.store-btns .btn { justify-content: space-between; flex-wrap: nowrap; }
+.store-btns .price { display: inline-flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.18); padding: 1px 8px; border-radius: 999px; }
+
 </style>
 </head>
 <body>
@@ -863,6 +869,16 @@ CH.ITEMS = {
   foodPack: { name: 'Food Wagon', kind: 'res', res: { food: 8000 }, icon: 'food', desc: '+8,000 food.' },
 };
 CH.ITEM_ORDER = Object.keys(CH.ITEMS);
+
+/* Gem shop. Resources bought here are added directly and may exceed storage (like a gift). */
+CH.GEM_SHOP = {
+  resources: [
+    { amount: 5000, gems: 20 }, { amount: 25000, gems: 90 }, { amount: 100000, gems: 320 },
+  ],
+  foodBonus: 1.5, // food packs contain 50% more
+  items: { speed5m: 10, speed1h: 60, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
+};
 
 /* Academy technologies (on top of troop research). Max level = academy level. */
 CH.TECHS = {
@@ -1229,7 +1245,7 @@ CH.troopPower = t => CH.TROOPS[t] ? CH.TROOPS[t].power : 1;
  * To add a code:  node tools/codegen.js MYCODE2026
  * then paste the printed line into CH.REDEEM_CODES below and rebuild.
  *
- * reward: gold, wood, stone, food, gems, runes, xp, troops: { swordsman: 10 } and/or items: { shield8h: 1, teleAdvanced: 1 }
+ * reward: gold, wood, stone, food, gems, runes, xp, troops: { swordsman: 10 }, items: { shield8h: 1 }, heroes: ['elara'] (unlock)
  *         (redeem rewards may exceed storage limits; they are a gift)
  * start / expires: optional 'YYYY-MM-DD' dates (expires = last valid day)
  * minCastle: optional minimum castle level
@@ -1589,6 +1605,24 @@ CH.State = (function () {
     s.res.gems -= c; job.ends = now;
     return true;
   }
+  /** Gem shop. kind: 'res' (r, i = pack index) | 'fill' (r) | 'item' (id). */
+  function shopPrice(s, kind, a, b) {
+    if (kind === 'res') return CH.GEM_SHOP.resources[b].gems;
+    if (kind === 'fill') return Math.ceil(Math.max(0, capacity(s, a) - s.res[a]) / CH.GEM_SHOP.fillPerGem);
+    return CH.GEM_SHOP.items[a];
+  }
+  function buy(s, kind, a, b) {
+    const price = shopPrice(s, kind, a, b);
+    if (kind === 'fill' && price <= 0) return { ok: false, reason: 'Your ' + a + ' storage is already full' };
+    if (!(price > 0)) return { ok: false, reason: 'Not for sale' };
+    if (s.res.gems < price) return { ok: false, reason: 'Not enough gems (' + price + ' needed)' };
+    s.res.gems -= price;
+    let got;
+    if (kind === 'res') { got = Math.round(CH.GEM_SHOP.resources[b].amount * (a === 'food' ? CH.GEM_SHOP.foodBonus : 1)); s.res[a] += got; }
+    else if (kind === 'fill') { got = Math.floor(capacity(s, a) - s.res[a]); s.res[a] += got; }
+    else { s.items[a] = (s.items[a] || 0) + 1; got = 1; }
+    return { ok: true, got, price };
+  }
   const shielded = (s, now = Date.now()) => s.shieldUntil > now;
   const beginner = (s, now = Date.now()) => castleLevel(s) < 3 && now - (s.createdAt || now) < C.BEGINNER_MIN * 60000;
   /** Total military + development power, shown everywhere and used for AI matchmaking. */
@@ -1777,6 +1811,7 @@ CH.State = (function () {
     for (const r of [...RES, 'gems', 'runes']) if (rw[r]) s.res[r] += Math.max(0, Math.floor(rw[r]));
     if (rw.troops) for (const t in rw.troops) if (CH.TROOPS[t]) s.army[t] = (s.army[t] || 0) + Math.max(0, Math.floor(rw.troops[t]));
     if (rw.items) for (const i in rw.items) if (CH.ITEMS[i]) s.items[i] = (s.items[i] || 0) + Math.max(0, Math.floor(rw.items[i]));
+    if (rw.heroes) for (const h of rw.heroes) if (s.heroes[h]) s.heroes[h].unlocked = true;
     const levels = rw.xp ? addXp(s, rw.xp) : [];
     s.redeemed.push(h);
     return { ok: true, entry, levels };
@@ -1886,7 +1921,7 @@ CH.State = (function () {
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
     collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
-    prodMult, upkeepPerHour, protectedAmount, resLevel,
+    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,
     tick, goals, unlocksAt, redeem,
   };
@@ -3655,7 +3690,9 @@ CH.Siege = (function () {
     if (m.kind === 'return') {
       if (m.owner === 'player') {
         for (const t in m.army) s.army[t] = (s.army[t] || 0) + m.army[t];
-        const got = CH.State.give(s, m.cargo || {});
+        // Cargo carried home (gathering, loot) is always kept in full, even above storage limits.
+        const got = {};
+        for (const r in m.cargo || {}) if (m.cargo[r] > 0) { s.res[r] = (s.res[r] || 0) + m.cargo[r]; got[r] = Math.floor(m.cargo[r]); }
         if (m.cargo && Object.values(m.cargo).some(n => n > 0)) ev.push({ kind: 'returned', cargo: got });
       } else if (owner) {
         for (const t in m.army) owner.tr[t] = (owner.tr[t] || 0) + m.army[t];
@@ -3669,7 +3706,9 @@ CH.Siege = (function () {
       const tile = w.tiles.find(t => t.id === m.target.id);
       const took = Math.min(m.gatherAmt, tile ? tile.amt : 0);
       if (tile) { tile.amt -= took; tile.by = null; if (tile.amt <= 0) { tile.amt = Math.round(4000 * Math.pow(tile.lvl, 1.5)); } }
-      returnMarch(w, { ...m, t0: m.arrivedAt, t1: m.arrivedAt + (m.travel || 30000) }, T, m.army, { [tile ? tile.type : 'food']: took });
+      // Head home from the tile (the castle may have teleported meanwhile).
+      w.marches.push({ id: 'm' + w.nextId++, owner: 'player', kind: 'return', fx: m.tx, fy: m.ty, tx: w.px, ty: w.py, t0: T, t1: T + (m.travel || 30000),
+        army: m.army, hero: m.hero, heroLevel: m.heroLevel, cargo: { [tile ? tile.type : 'food']: took }, target: { type: 'home' } });
       addReport(s, { t: T, kind: 'gather', title: 'Gathered ' + U.fmt(took) + ' ' + (tile ? tile.type : ''), outcome: 'win', coords: [m.tx, m.ty] });
       ev.push({ kind: 'report', report: s.reports[0] });
       return;
@@ -3895,7 +3934,7 @@ CH.Siege = (function () {
     if (reward.gems) s.res.gems += reward.gems;
     if (reward.runes) s.res.runes += reward.runes;
     if (hero && tgt.type !== 'camp' && tgt.type !== 'ruin') heroXp(s, hero.id, 40 + armyPower(sum.def.lost) / 30);
-    if (armyCount(m.army)) returnMarch(w, m, T, m.army, loot); else if (Object.keys(loot).length) CH.State.give(s, loot);
+    if (armyCount(m.army)) returnMarch(w, m, T, m.army, loot);
     const rep = addReport(s, {
       t: T, kind: tgt.type === 'kingdom' || tgt.type === 'fort' ? 'attack' : 'monster', you: 'atk', outcome: sum.outcome,
       title: (sum.outcome === 'win' ? 'Victory at ' : sum.outcome === 'partial' ? 'Partial victory at ' : 'Defeat at ') + defender.name,
@@ -4090,9 +4129,16 @@ CH.Siege = (function () {
   function joinFaction(s, f, now = Date.now()) {
     if (!CH.State.highestLevel(s, 'embassy')) return { ok: false, reason: 'Build an Embassy first' };
     if (s.faction === f) return { ok: false, reason: 'Already a member' };
-    if (s.faction != null && now - s.factionChangedAt < 60 * MIN) return { ok: false, reason: 'You can change factions once per hour' };
+    if (s.factionChangedAt && now - s.factionChangedAt < 60 * MIN) return { ok: false, reason: 'You can join a faction again in ' + U.time((60 * MIN - (now - s.factionChangedAt)) / 1000) };
     s.faction = f; s.factionChangedAt = now;
     return { ok: true };
+  }
+  function leaveFaction(s, now = Date.now()) {
+    if (s.faction == null) return { ok: false, reason: 'You are not in a faction' };
+    const old = CH.FACTIONS[s.faction].name;
+    s.faction = null; s.factionChangedAt = now; s.helpUntil = 0;
+    news(W(s), now, s.player.name + ' left the ' + old + '.', 'world');
+    return { ok: true, old };
   }
   function incoming(s) { return W(s) ? W(s).marches.filter(m => m.kind === 'attack' && m.target.type === 'player') : []; }
   function power(k) { return Math.round(aiDefPower(k)); }
@@ -4111,7 +4157,7 @@ CH.Siege = (function () {
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
-    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
+    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
     territoryBonus, onShield, findAny, campMonsters, campRewards, dist, N, heroXp, PKEYS,
   };
 })();
@@ -5402,6 +5448,7 @@ CH.Home = (function () {
       if (e.target.closest('#hud-player')) UI.sheet('profile');
       else if (e.target.closest('#hud-settings')) UI.sheet('settings');
       else if (e.target.closest('#hud-mail')) UI.sheet('mail');
+      else if (e.target.closest('[data-res="gems"]')) UI.sheet('store');
       else if (e.target.closest('[data-res]')) UI.sheet('resources');
     };
     $('dock').innerHTML =
@@ -5435,7 +5482,7 @@ CH.Home = (function () {
   }
   function moreMenu() {
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['mail', 'map', 'Reports'], ['bag', 'gems', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
+      [['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['redeem', 'gems', 'Redeem code'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
     { onClick: e => { const b = e.target.closest('[data-more]'); if (b) { UI.closeModal(); UI.sheet(b.dataset.more); } } });
@@ -5970,11 +6017,15 @@ CH.Screens = (function () {
       title: 'Factions',
       html: '<p class="lead">Factions are alliances of AI kingdoms (simulated; there is no online multiplayer). Members never attack each other, you get the faction bonus, and allies can send reinforcements when you are attacked (Embassy required). Joining one makes its members friendly, but other factions remain hostile.</p>' +
         (emb ? '' : '<p class="warn">Build an Embassy to join a faction.</p>') +
-        (s.faction != null ? '<div class="row"><button class="btn" data-act="help">Request reinforcements</button><span class="muted">' + (Date.now() - (s.helpUsedAt || 0) < 3600e3 ? 'Available again in ' + U.time((3600e3 - (Date.now() - s.helpUsedAt)) / 1000) : 'Ready') + '</span></div>' : '') +
+        (s.faction != null ? '<div class="row"><button class="btn" data-act="help">Request reinforcements</button><button class="btn btn-danger-quiet" data-act="leave">Leave faction</button><span class="muted">' + (Date.now() - (s.helpUsedAt || 0) < 3600e3 ? 'Available again in ' + U.time((3600e3 - (Date.now() - s.helpUsedAt)) / 1000) : 'Ready') + '</span></div>' : '') +
         (ev.active && ev.ev.id === 'territoryWar' ? '<p class="good">Territory War points: ' + CH.FACTIONS.map((f, i) => f.name + ' ' + w.fpts[i]).join(' · ') + '</p>' : '') +
         '<div class="k-grid">' + cards + '</div>',
       on: {
         join: b => { const r = CH.World.joinFaction(s, +b.dataset.f); if (!r.ok) return fail(r); CH.Audio.play('heroDeploy'); persist(); UI.refreshSheet(); },
+        leave: () => {
+          UI.modal('<h3>Leave ' + CH.FACTIONS[s.faction].name + '?</h3><p>You lose the faction bonus and reinforcements, and its members may attack you again. You can join a faction again after 1 hour.</p><div class="row"><button class="btn btn-danger" data-lv>Leave</button><button class="btn" data-close>Stay</button></div>',
+            { onClick: e => { if (e.target.closest('[data-lv]')) { const r = CH.World.leaveFaction(s); UI.closeModal(); if (!r.ok) return fail(r); persist(); UI.toast('You left the ' + r.old, 'info'); UI.refreshSheet(); } } });
+        },
         help: () => { const r = CH.World.requestHelp(s); if (!r.ok) return fail(r); persist(); UI.toast(r.troops + ' allied troops will defend you for 30 minutes', 'good'); UI.refreshSheet(); },
       },
     };
@@ -6026,6 +6077,31 @@ CH.Screens = (function () {
         readall: () => { for (const r of s.reports) r.read = true; s.unread = 0; persist(); UI.refreshSheet(); },
       },
     };
+  }
+
+  /* ---------------- Gem shop ---------------- */
+  function store() {
+    const s = save(), G = CH.GEM_SHOP, R = ['gold', 'wood', 'stone', 'food'];
+    const resCards = R.map(r => '<div class="panel store-card"><div class="k-head">' + icon(r, 'big-ico') + '<div><h3>' + r[0].toUpperCase() + r.slice(1) + '</h3><span class="muted">' + U.fmt(s.res[r]) + ' / ' + U.fmt(S.capacity(s, r)) + '</span></div></div>' +
+      '<div class="store-btns">' + G.resources.map((p, i) => '<button class="btn btn-gem" data-act="res" data-r="' + r + '" data-i="' + i + '"' + (s.res.gems >= p.gems ? '' : ' disabled') + '><span>+' + U.fmt(p.amount * (r === 'food' ? G.foodBonus : 1)) + ' ' + r + '</span><span class="price">' + icon('gems') + p.gems + '</span></button>').join('') +
+      (S.shopPrice(s, 'fill', r) > 0 ? '<button class="btn" data-act="fill" data-r="' + r + '"' + (s.res.gems >= S.shopPrice(s, 'fill', r) ? '' : ' disabled') + '><span>Fill storage</span><span class="price">' + icon('gems') + S.shopPrice(s, 'fill', r) + '</span></button>' : '<span class="muted">Storage full</span>') + '</div></div>').join('');
+    const itemCards = Object.keys(G.items).map(id => '<div class="b-row">' + icon(CH.ITEMS[id].icon, 'big-ico') + '<div class="b-info"><b>' + CH.ITEMS[id].name + '</b><span class="muted">' + CH.ITEMS[id].desc + ' · You have ' + (s.items[id] || 0) + '</span></div><button class="btn btn-gem" data-act="item" data-id="' + id + '"' + (s.res.gems >= G.items[id] ? '' : ' disabled') + '>' + icon('gems') + G.items[id] + '</button></div>').join('');
+    return {
+      title: 'Gem Shop',
+      html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
+        '<h4 class="group">Resources</h4><p class="muted">Bought resources are added straight to your kingdom and can go above your storage limit.</p><div class="k-grid">' + resCards + '</div>' +
+        '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
+      on: {
+        res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
+      },
+    };
+    function doBuy(kind, a, i) {
+      const r = S.buy(s, kind, a, i);
+      if (!r.ok) return fail(r);
+      CH.Audio.play('collect'); persist(); CH.Home.refreshHud(true);
+      UI.toast(kind === 'item' ? 'Bought ' + CH.ITEMS[a].name + ' (in your Bag)' : '+' + U.fmt(r.got) + ' ' + a + ' for ' + r.price + ' gems', 'good');
+      UI.refreshSheet();
+    }
   }
 
   /* ---------------- Heroes ---------------- */
@@ -6150,7 +6226,7 @@ CH.Screens = (function () {
   function redeem() {
     const s = save();
     const got = (CH.REDEEM_CODES || []).filter(c => s.redeemed.includes(c.hash));
-    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '');
+    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '');
     return {
       title: 'Redeem code',
       html: '<div class="redeem panel"><label class="label" for="rcode">Enter a gift code</label>' +
@@ -6209,7 +6285,7 @@ CH.Screens = (function () {
     };
   }
 
-  return { shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
+  return { store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
 })();
 
 </script>
@@ -6642,6 +6718,7 @@ CH.WorldUI = (function () {
     const heroes = CH.HERO_ORDER.filter(id => s.heroes[id].unlocked && !busy.has(id));
     let hero = kind === 'attack' ? (heroes[0] || null) : null, formation = 'surround';
     const est = () => {
+      if (type === 'tile') return 0;
       if (type === 'kingdom') return CH.World.power(o);
       if (type === 'fort') return o.owner === 'player' ? 0 : 6000 * Math.pow(1.5, o.lvl);
       const mon = CH.World.campMonsters(o, w, Date.now()); let p = 0; for (const t in mon) p += mon[t] * Math.max(5, Math.sqrt((CH.ENEMIES[t].hp || 50) * (CH.ENEMIES[t].dmg || 5)) / 3) * (1 + 0.25 * o.lvl);
@@ -6674,7 +6751,8 @@ CH.WorldUI = (function () {
       const n = Object.values(sel).reduce((a, x) => a + x, 0), pow = CH.World.armyPower(sel) * (hero ? 1.1 : 1), load = CH.World.loadOf(sel);
       const secs = CH.World.marchSeconds({ x: w.px, y: w.py }, o, sel, CH.World.marchSpeedMult(s, hero), kind);
       const odds = kind === 'attack' && target ? pow / target : null;
-      $('m-sum').innerHTML = '<span>' + U.fmt(n) + ' troops</span><span>Power ' + U.fmt(pow) + '</span><span>Load ' + U.fmt(load) + '</span><span>' + icon('time') + U.time(secs) + '</span>' +
+      const gatherInfo = kind === 'gather' ? '<span>Brings home ' + U.fmt(Math.min(load, o.amt)) + ' ' + o.type + ' in ~' + U.time(secs * 2 + Math.min(load, o.amt) / (6 * o.lvl * (CH.World.evOn(w, Date.now(), 'resourceRush') ? 2 : 1))) + '</span>' : '';
+      $('m-sum').innerHTML = '<span>' + U.fmt(n) + ' troops</span><span>Power ' + U.fmt(pow) + '</span><span>Load ' + U.fmt(load) + '</span><span>' + icon('time') + U.time(secs) + '</span>' + gatherInfo +
         (odds ? '<span class="' + (odds > 1.3 ? 'good' : odds > 0.9 ? '' : 'warn') + '">' + (odds > 1.3 ? 'Favourable' : odds > 0.9 ? 'Even fight' : 'Risky') + ' vs ~' + U.fmt(target) + '</span>' : '');
     }
     summary();

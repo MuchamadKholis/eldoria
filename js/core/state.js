@@ -324,6 +324,24 @@ CH.State = (function () {
     s.res.gems -= c; job.ends = now;
     return true;
   }
+  /** Gem shop. kind: 'res' (r, i = pack index) | 'fill' (r) | 'item' (id). */
+  function shopPrice(s, kind, a, b) {
+    if (kind === 'res') return CH.GEM_SHOP.resources[b].gems;
+    if (kind === 'fill') return Math.ceil(Math.max(0, capacity(s, a) - s.res[a]) / CH.GEM_SHOP.fillPerGem);
+    return CH.GEM_SHOP.items[a];
+  }
+  function buy(s, kind, a, b) {
+    const price = shopPrice(s, kind, a, b);
+    if (kind === 'fill' && price <= 0) return { ok: false, reason: 'Your ' + a + ' storage is already full' };
+    if (!(price > 0)) return { ok: false, reason: 'Not for sale' };
+    if (s.res.gems < price) return { ok: false, reason: 'Not enough gems (' + price + ' needed)' };
+    s.res.gems -= price;
+    let got;
+    if (kind === 'res') { got = Math.round(CH.GEM_SHOP.resources[b].amount * (a === 'food' ? CH.GEM_SHOP.foodBonus : 1)); s.res[a] += got; }
+    else if (kind === 'fill') { got = Math.floor(capacity(s, a) - s.res[a]); s.res[a] += got; }
+    else { s.items[a] = (s.items[a] || 0) + 1; got = 1; }
+    return { ok: true, got, price };
+  }
   const shielded = (s, now = Date.now()) => s.shieldUntil > now;
   const beginner = (s, now = Date.now()) => castleLevel(s) < 3 && now - (s.createdAt || now) < C.BEGINNER_MIN * 60000;
   /** Total military + development power, shown everywhere and used for AI matchmaking. */
@@ -512,6 +530,7 @@ CH.State = (function () {
     for (const r of [...RES, 'gems', 'runes']) if (rw[r]) s.res[r] += Math.max(0, Math.floor(rw[r]));
     if (rw.troops) for (const t in rw.troops) if (CH.TROOPS[t]) s.army[t] = (s.army[t] || 0) + Math.max(0, Math.floor(rw.troops[t]));
     if (rw.items) for (const i in rw.items) if (CH.ITEMS[i]) s.items[i] = (s.items[i] || 0) + Math.max(0, Math.floor(rw.items[i]));
+    if (rw.heroes) for (const h of rw.heroes) if (s.heroes[h]) s.heroes[h].unlocked = true;
     const levels = rw.xp ? addXp(s, rw.xp) : [];
     s.redeemed.push(h);
     return { ok: true, entry, levels };
@@ -621,7 +640,7 @@ CH.State = (function () {
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
     collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
-    prodMult, upkeepPerHour, protectedAmount, resLevel,
+    prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,
     tick, goals, unlocksAt, redeem,
   };

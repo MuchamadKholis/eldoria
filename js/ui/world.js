@@ -203,6 +203,7 @@ CH.WorldUI = (function () {
     const heroes = CH.HERO_ORDER.filter(id => s.heroes[id].unlocked && !busy.has(id));
     let hero = kind === 'attack' ? (heroes[0] || null) : null, formation = 'surround';
     const est = () => {
+      if (type === 'tile') return 0;
       if (type === 'kingdom') return CH.World.power(o);
       if (type === 'fort') return o.owner === 'player' ? 0 : 6000 * Math.pow(1.5, o.lvl);
       const mon = CH.World.campMonsters(o, w, Date.now()); let p = 0; for (const t in mon) p += mon[t] * Math.max(5, Math.sqrt((CH.ENEMIES[t].hp || 50) * (CH.ENEMIES[t].dmg || 5)) / 3) * (1 + 0.25 * o.lvl);
@@ -235,7 +236,8 @@ CH.WorldUI = (function () {
       const n = Object.values(sel).reduce((a, x) => a + x, 0), pow = CH.World.armyPower(sel) * (hero ? 1.1 : 1), load = CH.World.loadOf(sel);
       const secs = CH.World.marchSeconds({ x: w.px, y: w.py }, o, sel, CH.World.marchSpeedMult(s, hero), kind);
       const odds = kind === 'attack' && target ? pow / target : null;
-      $('m-sum').innerHTML = '<span>' + U.fmt(n) + ' troops</span><span>Power ' + U.fmt(pow) + '</span><span>Load ' + U.fmt(load) + '</span><span>' + icon('time') + U.time(secs) + '</span>' +
+      const gatherInfo = kind === 'gather' ? '<span>Brings home ' + U.fmt(Math.min(load, o.amt)) + ' ' + o.type + ' in ~' + U.time(secs * 2 + Math.min(load, o.amt) / (6 * o.lvl * (CH.World.evOn(w, Date.now(), 'resourceRush') ? 2 : 1))) + '</span>' : '';
+      $('m-sum').innerHTML = '<span>' + U.fmt(n) + ' troops</span><span>Power ' + U.fmt(pow) + '</span><span>Load ' + U.fmt(load) + '</span><span>' + icon('time') + U.time(secs) + '</span>' + gatherInfo +
         (odds ? '<span class="' + (odds > 1.3 ? 'good' : odds > 0.9 ? '' : 'warn') + '">' + (odds > 1.3 ? 'Favourable' : odds > 0.9 ? 'Even fight' : 'Risky') + ' vs ~' + U.fmt(target) + '</span>' : '');
     }
     summary();

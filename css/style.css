@@ -501,3 +501,9 @@ body.in-world .hud, body.in-world .sidebar, body.in-world .dock, body.in-world .
   .rep-sides { grid-template-columns: 1fr; }
   .alert { font-size: 0.8rem; padding: 6px 12px; top: calc(env(safe-area-inset-top, 0px) + 92px); }
 }
+
+/* Gem shop */
+.store-card { display: flex; flex-direction: column; gap: 10px; }
+.store-btns { display: flex; flex-direction: column; gap: 6px; }
+.store-btns .btn { justify-content: space-between; flex-wrap: nowrap; }
+.store-btns .price { display: inline-flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.18); padding: 1px 8px; border-radius: 999px; }

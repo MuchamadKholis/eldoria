@@ -245,11 +245,15 @@ CH.Screens = (function () {
       title: 'Factions',
       html: '<p class="lead">Factions are alliances of AI kingdoms (simulated; there is no online multiplayer). Members never attack each other, you get the faction bonus, and allies can send reinforcements when you are attacked (Embassy required). Joining one makes its members friendly, but other factions remain hostile.</p>' +
         (emb ? '' : '<p class="warn">Build an Embassy to join a faction.</p>') +
-        (s.faction != null ? '<div class="row"><button class="btn" data-act="help">Request reinforcements</button><span class="muted">' + (Date.now() - (s.helpUsedAt || 0) < 3600e3 ? 'Available again in ' + U.time((3600e3 - (Date.now() - s.helpUsedAt)) / 1000) : 'Ready') + '</span></div>' : '') +
+        (s.faction != null ? '<div class="row"><button class="btn" data-act="help">Request reinforcements</button><button class="btn btn-danger-quiet" data-act="leave">Leave faction</button><span class="muted">' + (Date.now() - (s.helpUsedAt || 0) < 3600e3 ? 'Available again in ' + U.time((3600e3 - (Date.now() - s.helpUsedAt)) / 1000) : 'Ready') + '</span></div>' : '') +
         (ev.active && ev.ev.id === 'territoryWar' ? '<p class="good">Territory War points: ' + CH.FACTIONS.map((f, i) => f.name + ' ' + w.fpts[i]).join(' · ') + '</p>' : '') +
         '<div class="k-grid">' + cards + '</div>',
       on: {
         join: b => { const r = CH.World.joinFaction(s, +b.dataset.f); if (!r.ok) return fail(r); CH.Audio.play('heroDeploy'); persist(); UI.refreshSheet(); },
+        leave: () => {
+          UI.modal('<h3>Leave ' + CH.FACTIONS[s.faction].name + '?</h3><p>You lose the faction bonus and reinforcements, and its members may attack you again. You can join a faction again after 1 hour.</p><div class="row"><button class="btn btn-danger" data-lv>Leave</button><button class="btn" data-close>Stay</button></div>',
+            { onClick: e => { if (e.target.closest('[data-lv]')) { const r = CH.World.leaveFaction(s); UI.closeModal(); if (!r.ok) return fail(r); persist(); UI.toast('You left the ' + r.old, 'info'); UI.refreshSheet(); } } });
+        },
         help: () => { const r = CH.World.requestHelp(s); if (!r.ok) return fail(r); persist(); UI.toast(r.troops + ' allied troops will defend you for 30 minutes', 'good'); UI.refreshSheet(); },
       },
     };
@@ -301,6 +305,31 @@ CH.Screens = (function () {
         readall: () => { for (const r of s.reports) r.read = true; s.unread = 0; persist(); UI.refreshSheet(); },
       },
     };
+  }
+
+  /* ---------------- Gem shop ---------------- */
+  function store() {
+    const s = save(), G = CH.GEM_SHOP, R = ['gold', 'wood', 'stone', 'food'];
+    const resCards = R.map(r => '<div class="panel store-card"><div class="k-head">' + icon(r, 'big-ico') + '<div><h3>' + r[0].toUpperCase() + r.slice(1) + '</h3><span class="muted">' + U.fmt(s.res[r]) + ' / ' + U.fmt(S.capacity(s, r)) + '</span></div></div>' +
+      '<div class="store-btns">' + G.resources.map((p, i) => '<button class="btn btn-gem" data-act="res" data-r="' + r + '" data-i="' + i + '"' + (s.res.gems >= p.gems ? '' : ' disabled') + '><span>+' + U.fmt(p.amount * (r === 'food' ? G.foodBonus : 1)) + ' ' + r + '</span><span class="price">' + icon('gems') + p.gems + '</span></button>').join('') +
+      (S.shopPrice(s, 'fill', r) > 0 ? '<button class="btn" data-act="fill" data-r="' + r + '"' + (s.res.gems >= S.shopPrice(s, 'fill', r) ? '' : ' disabled') + '><span>Fill storage</span><span class="price">' + icon('gems') + S.shopPrice(s, 'fill', r) + '</span></button>' : '<span class="muted">Storage full</span>') + '</div></div>').join('');
+    const itemCards = Object.keys(G.items).map(id => '<div class="b-row">' + icon(CH.ITEMS[id].icon, 'big-ico') + '<div class="b-info"><b>' + CH.ITEMS[id].name + '</b><span class="muted">' + CH.ITEMS[id].desc + ' · You have ' + (s.items[id] || 0) + '</span></div><button class="btn btn-gem" data-act="item" data-id="' + id + '"' + (s.res.gems >= G.items[id] ? '' : ' disabled') + '>' + icon('gems') + G.items[id] + '</button></div>').join('');
+    return {
+      title: 'Gem Shop',
+      html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
+        '<h4 class="group">Resources</h4><p class="muted">Bought resources are added straight to your kingdom and can go above your storage limit.</p><div class="k-grid">' + resCards + '</div>' +
+        '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
+      on: {
+        res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
+      },
+    };
+    function doBuy(kind, a, i) {
+      const r = S.buy(s, kind, a, i);
+      if (!r.ok) return fail(r);
+      CH.Audio.play('collect'); persist(); CH.Home.refreshHud(true);
+      UI.toast(kind === 'item' ? 'Bought ' + CH.ITEMS[a].name + ' (in your Bag)' : '+' + U.fmt(r.got) + ' ' + a + ' for ' + r.price + ' gems', 'good');
+      UI.refreshSheet();
+    }
   }
 
   /* ---------------- Heroes ---------------- */
@@ -425,7 +454,7 @@ CH.Screens = (function () {
   function redeem() {
     const s = save();
     const got = (CH.REDEEM_CODES || []).filter(c => s.redeemed.includes(c.hash));
-    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '');
+    const describe = rw => UI.reward(rw) + (rw.troops ? Object.entries(rw.troops).map(([t, n]) => '<span class="chip">' + n + '× ' + (CH.TROOPS[t] ? CH.TROOPS[t].name : t) + '</span>').join('') : '') + (rw.items ? Object.entries(rw.items).map(([i, n]) => '<span class="chip">' + n + '× ' + (CH.ITEMS[i] ? CH.ITEMS[i].name : i) + '</span>').join('') : '') + (rw.heroes ? rw.heroes.map(h => '<span class="chip">Hero: ' + (CH.HEROES[h] ? CH.HEROES[h].name : h) + '</span>').join('') : '');
     return {
       title: 'Redeem code',
       html: '<div class="redeem panel"><label class="label" for="rcode">Enter a gift code</label>' +
@@ -484,5 +513,5 @@ CH.Screens = (function () {
     };
   }
 
-  return { shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
+  return { store, shop, campaign, stages, endless, raidTargets, raidPrep, army, heroes, buildings, lab, resources, profile, settings, howto, redeem, infirmary, bag, factions, events, trade, mail };
 })();

@@ -323,6 +323,16 @@ CH.ITEMS = {
 };
 CH.ITEM_ORDER = Object.keys(CH.ITEMS);
 
+/* Gem shop. Resources bought here are added directly and may exceed storage (like a gift). */
+CH.GEM_SHOP = {
+  resources: [
+    { amount: 5000, gems: 20 }, { amount: 25000, gems: 90 }, { amount: 100000, gems: 320 },
+  ],
+  foodBonus: 1.5, // food packs contain 50% more
+  items: { speed5m: 10, speed1h: 60, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
+};
+
 /* Academy technologies (on top of troop research). Max level = academy level. */
 CH.TECHS = {
   prosperity: { name: 'Prosperity', desc: '+5% production of all resources per level.', max: 8 },
