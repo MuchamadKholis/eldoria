@@ -20,7 +20,7 @@ CH.State = (function () {
       army: { swordsman: 300, archer: 200, lightCavalry: 100 }, train: [], trainJobs: {}, wounded: {}, healJob: null,
       research: { troops, spells, techs }, rjob: null, heroes, defenseHero: 'aldric',
       items: { shield8h: 1, teleRandom: 1, teleAdvanced: 1, speed5m: 5, speed1h: 1 },
-      skins: { castle: ['classic'], hero: {} }, equipped: { castle: 'classic', hero: {} }, extraMarch: 0,
+      revive: [], skins: { castle: ['classic'], hero: {} }, equipped: { castle: 'classic', hero: {} }, extraMarch: 0,
       shieldUntil: 0, createdAt: now, faction: null, factionChangedAt: 0, helpUsedAt: 0, reports: [], unread: 0, world: null,
       campaign: {}, raid: { trophies: 0, seed: 1000 + Math.floor(Math.random() * 1e6), opponents: [], wins: 0, attacks: 0 },
       defense: { best: 0, runs: 0, claimed: [] },
@@ -29,6 +29,7 @@ CH.State = (function () {
       settings: { music: 0.45, sfx: 0.7, muted: false, damageNumbers: true },
       redeemed: [],
       introSeen: false, lastSeen: now,
+      meta: null, mats: { iron: 20, leather: 20, crystal: 2, dragonscale: 0 }, gear: [],
     };
   }
 
@@ -227,10 +228,11 @@ CH.State = (function () {
     const room = capacity(s, r) - s.res[r];
     const amt = Math.floor(Math.min(b.buf, room));
     s.res[r] += amt; b.buf -= amt;
+    if (CH.Meta && amt > 0) CH.Meta.track(s, 'collect', amt);
     return amt;
   }
   function collectAll(s) {
-    const got = { gold: 0, wood: 0, stone: 0 };
+    const got = { gold: 0, wood: 0, stone: 0, food: 0 };
     for (const b of s.buildings) if (B[b.type].cat === 'econ') got[B[b.type].res] += collect(s, b.id);
     return got;
   }
@@ -480,7 +482,7 @@ CH.State = (function () {
           events.push({ kind: 'cleared', type: b.type, got, gems });
           continue;
         }
-        b.level = b.job.to; b.job = null;
+        b.level = b.job.to; b.job = null; if (CH.Meta) CH.Meta.track(s, 'build', 1, now);
         const lv = addXp(s, 10 + 8 * b.level * (b.type === 'castle' ? 3 : 1));
         events.push({ kind: 'built', type: b.type, level: b.level, levels: lv });
       }
@@ -488,11 +490,16 @@ CH.State = (function () {
     for (const b of cleared) s.buildings.splice(s.buildings.indexOf(b), 1);
     for (const bld in s.trainJobs) {
       const j = s.trainJobs[bld];
-      if (j.ends <= now) { s.army[j.type] = (s.army[j.type] || 0) + j.n; delete s.trainJobs[bld]; addXp(s, Math.ceil(j.n / 20)); events.push({ kind: 'trained', type: j.type, n: j.n }); }
+      if (j.ends <= now) { s.army[j.type] = (s.army[j.type] || 0) + j.n; delete s.trainJobs[bld]; if (CH.Meta) CH.Meta.track(s, 'train', j.n, now); addXp(s, Math.ceil(j.n / 20)); events.push({ kind: 'trained', type: j.type, n: j.n }); }
+    }
+    if (s.revive && s.revive.length) {
+      let n = 0;
+      s.revive = s.revive.filter(r => { if (r.at > now) return true; for (const t in r.army) { s.army[t] = (s.army[t] || 0) + r.army[t]; n += r.army[t]; } return false; });
+      if (n) events.push({ kind: 'revived', n });
     }
     if (s.healJob && s.healJob.ends <= now) {
       let n = 0; for (const t in s.healJob.army) { s.army[t] = (s.army[t] || 0) + s.healJob.army[t]; n += s.healJob.army[t]; }
-      s.healJob = null; events.push({ kind: 'healed', n });
+      s.healJob = null; events.push({ kind: 'healed', n }); if (CH.Meta) CH.Meta.track(s, 'heal', n, now);
     }
     if (s.rjob && s.rjob.ends <= now) {
       const j = s.rjob; s.rjob = null;
@@ -647,6 +654,15 @@ CH.State = (function () {
     if (raw.skins && raw.skins.hero) for (const h of CH.HERO_ORDER) if (Array.isArray(raw.skins.hero[h])) d.skins.hero[h] = raw.skins.hero[h].filter(x => CH.SKINS[x]);
     if (raw.equipped) { if (d.skins.castle.includes(raw.equipped.castle)) d.equipped.castle = raw.equipped.castle; for (const h of CH.HERO_ORDER) { const v = raw.equipped.hero && raw.equipped.hero[h]; if (v && (d.skins.hero[h] || []).includes(v)) d.equipped.hero[h] = v; } }
     d.extraMarch = Math.floor(num(raw.extraMarch, 0, CH.MAX_MARCHES, 0));
+    // Progression (meta): copied structurally, then sanitised.
+    if (raw.meta && typeof raw.meta === 'object') { try { d.meta = JSON.parse(JSON.stringify(raw.meta)); } catch (e) { d.meta = {}; } }
+    d.mats = {}; for (const k of ['iron', 'leather', 'crystal', 'dragonscale']) d.mats[k] = Math.floor(num(raw.mats && raw.mats[k], 0, 1e9, 0));
+    d.gear = Array.isArray(raw.gear) ? raw.gear.filter(g => g && typeof g.id === 'string' && ['weapon', 'armor', 'trinket'].includes(g.slot) && g.tier >= 0 && g.tier <= 4).slice(0, 300) : [];
+    if (raw.heroes) for (const h of CH.HERO_ORDER) { const rh = raw.heroes[h] || {};
+      if (rh.gear) d.heroes[h].gear = { weapon: null, armor: null, trinket: null, ...Object.fromEntries(Object.entries(rh.gear).filter(([sl, id]) => sl in { weapon: 1, armor: 1, trinket: 1 } && d.gear.some(g => g.id === id && g.slot === sl))) };
+      if (rh.tal) d.heroes[h].tal = { off: Math.floor(num(rh.tal.off, 0, 10, 0)), def: Math.floor(num(rh.tal.def, 0, 10, 0)), cmd: Math.floor(num(rh.tal.cmd, 0, 10, 0)) }; }
+    if (CH.Meta) CH.Meta.ensure(d);
+    d.revive = Array.isArray(raw.revive) ? raw.revive.filter(r => r && typeof r.at === 'number').map(r => ({ at: r.at, army: troopMap(r.army) })).slice(0, 100) : [];
     d.stats.kills = Math.floor(num(raw.stats && raw.stats.kills, 0, 1e12, 0));
     d.reports = Array.isArray(raw.reports) ? raw.reports.filter(r => r && typeof r.t === 'number' && typeof r.kind === 'string').slice(0, 60) : [];
     d.unread = Math.floor(num(raw.unread, 0, 999, 0));

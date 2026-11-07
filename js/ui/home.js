@@ -17,14 +17,18 @@ CH.Home = (function () {
       '<div class="res-row">' + ['gold', 'wood', 'stone', 'food'].map(r => '<button class="res" data-res="' + r + '" title="' + r[0].toUpperCase() + r.slice(1) + '">' + UI.icon(r) + '<span class="res-txt"><b id="hud-' + r + '">0</b><span class="cap"><i id="hud-' + r + '-bar"></i></span></span></button>').join('') +
       '<button class="res gem" data-res="gems" title="Gems">' + UI.icon('gems') + '<b id="hud-gems">0</b></button>' +
       '<button class="res gem" data-res="runes" title="Runes (rare material)">' + UI.icon('runes') + '<b id="hud-runes">0</b></button></div>' +
+      '<button class="icon-btn mail-btn" id="hud-daily" aria-label="Daily">📅<b id="hud-claim"></b></button>' +
       '<button class="icon-btn mail-btn" id="hud-mail" aria-label="Reports">✉<b id="hud-unread"></b></button>' +
       '<button class="icon-btn" id="hud-settings" aria-label="Settings">' + UI.icon('gear') + '</button>';
     $('alert').onclick = () => { CH.Audio.play('click'); CH.WorldUI.incomingModal(); };
-    $('warbar').onclick = () => { CH.Audio.play('click'); const th = CH.App.save.world.throne; CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
+    $('warbar').onclick = () => { CH.Audio.play('click'); const w = CH.App.save.world, th = w.throne, war = th.war && !th.war.ended && Date.now() < th.war.end;
+      if (!war && w.inv) { const sh = w.inv.ships[0]; CH.WorldUI.open(sh); CH.WorldUI.select({ type: 'ship', o: sh }); return; }
+      CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
     $('hud').onclick = e => {
       if (e.target.closest('#hud-player')) UI.sheet('profile');
       else if (e.target.closest('#hud-settings')) UI.sheet('settings');
       else if (e.target.closest('#hud-mail')) UI.sheet('mail');
+      else if (e.target.closest('#hud-daily')) UI.sheet('daily');
       else if (e.target.closest('[data-res="gems"]')) UI.sheet('store');
       else if (e.target.closest('[data-res]')) UI.sheet('resources');
     };
@@ -58,9 +62,11 @@ CH.Home = (function () {
     $('panel').onclick = onPanelClick;
   }
   function moreMenu() {
+    const s = CH.App.save;
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['ranks', 'crown', 'Leaderboards'], ['skins', 'shield', 'Skins'], ['store', 'gems', 'Gem Shop'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
-        ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['redeem', 'gems', 'Redeem code'], ['howto', 'map', 'How to play']]
+      [['daily', 'time', 'Daily' + (CH.Meta.claimable(s) ? ' ●' : '')], ['season', 'crown', 'Season Pass'], ['arena', 'swords', 'Arena'], ['forge', 'hammer', 'Forge'], ['achievements', 'crown', 'Achievements'],
+        ['redeem', 'gems', 'Redeem code'], ['store', 'gems', 'Gem Shop'], ['ranks', 'crown', 'Ranks'], ['skins', 'shield', 'Skins'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
+        ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
     { onClick: e => { const b = e.target.closest('[data-more]'); if (b) { UI.closeModal(); UI.sheet(b.dataset.more); } } });
   }
@@ -84,6 +90,7 @@ CH.Home = (function () {
     }
     setText('hud-gems', U.fmt(s.res.gems)); setText('hud-runes', U.fmt(s.res.runes));
     setText('hud-unread', s.unread ? String(s.unread) : '');
+    { const c = CH.Meta.claimable(s); setText('hud-claim', c ? String(c) : ''); }
     CH.WorldUI.warBanner();
     // Incoming attack banner
     const inc = s.world ? CH.World.incoming(s) : [];

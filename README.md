@@ -106,7 +106,7 @@ Battles involving you run on the full **deterministic battle engine**:
   - Members of your faction never attack.
 - **Recovery shield** after every attack: 1 hour after a defense you win, 1.5 hours after a partial loss, 2 hours after a total loss.
 - **Protected resources:** 1,000 per castle level plus 25% of each storage building can never be stolen.
-- **Your raids:** you can't hit the same kingdom again for 30 minutes, and you can only take a share of its unprotected resources. Attacking or scouting a kingdom drops your own shield.
+- **Your raids:** there is no cooldown. You may attack any kingdom again right away; only a shield stops an attack. Each raid takes a share of the kingdom's *remaining* unprotected resources, so repeated raids on one target yield less and less. Attacking or scouting a kingdom drops your own shield.
 - **Offline:** catch-up is capped at 12 hours and at most 2 attacks on you resolve while you're away. On return you get a "While you were away" summary with resources, your reports and the realm's news.
 
 ### The Throne of Eldoria: Aurelion Citadel
@@ -120,6 +120,57 @@ Battles involving you run on the full **deterministic battle engine**:
   - Kingdoms that receive a chest stay loyal and won't attack the king during the reign.
   - An AI king shares the treasure with its faction, and you receive a chest if you're in that faction.
 - **Battles at the Citadel** that involve you use the full battle engine on its fortifications, with reports and replays.
+- **No permanent deaths in the Throne War:** troops that fall at the Citadel (yours, your allies' and the AIs') return home 5 minutes later.
+- **Withdrawing:** you can pull your garrison out any time from the Citadel panel or the marches drawer. If you hold the Citadel, it then stands empty and the next army to arrive takes it without a fight.
+
+### Changing the Throne War schedule
+Edit `CH.THRONE` in `js/data/defs.js`:
+```js
+warDay: 6,      // 0 Sunday, 1 Monday, 2 Tuesday, 3 Wednesday, 4 Thursday, 5 Friday, 6 Saturday
+warHour: 15,    // 0–23, 24-hour clock (each player's device time)
+warMinute: 0,   // 0–59
+warMinutes: 30, // how long the war lasts
+```
+All in-game text (banner, Citadel panel, error messages) follows these values automatically. The king always reigns until the next war. To test a war right away, set `warDay` to today and `warHour`/`warMinute` a couple of minutes ahead, then reload.
+
+### Invasions: 👽 Alien Invasion and 😈 Demon Invasion
+Two of the eight rotating world events.
+- **The attack:** motherships (aliens) or hell portals (demons) land around the map. Every 4 minutes they send a wave at **every castle at once**: all 60 AI kingdoms and you, each wave stronger than the last.
+- **Your castle:** waves are real battles on your base (with replays). AI castles fight with the formula.
+- **No deaths:** troops never die in an invasion and nothing is stolen. It's purely a race for kills.
+- **Counterattacking:** you can attack the motherships or portals for extra kills; their guard scales to the army you bring.
+- **Rewards:** when the event ends you're paid by your kill count (gems, gold, food and materials), with a bonus for ranking top 1, top 3 or top 10 among all 61 kingdoms. A gold banner shows the wave, your kills and the time left, and the Events screen shows the live kill ranking.
+
+### Daily quests and login rewards (📅 button in the HUD, or More → Daily)
+- **Quests:** five new quests every day at midnight, chosen from 10 kinds (train, raid, clear camps, gather, collect, scout, build, kill, heal, arena). Each pays gems and resources, and finishing all five opens a bonus chest.
+- **Login streak:** 7-day cycle with the best reward on day 7. Missing a day restarts it.
+
+### Achievements and titles
+18 achievements (raids, kills, camps, the dragon, defenses, gathering, crowns, castle 8, hero level 10, legendary gear, invasion kills, nemesis, arena, login streak) pay gems and unlock titles. The title you wear appears next to your name on the map and in the rankings.
+
+### Season Pass
+- **Levels:** 30 levels per 30-day season, earned with XP from quests, raids, camps, defenses, arena wins, kills and invasions.
+- **Tracks:** a free track, plus a Premium track for 500 gems that includes castle skins at levels 15 and 30.
+
+### Hero forge and talents (Heroes → Gear & Talents, or More → Forge)
+- **Gear:** craft weapons, armor and trinkets in five tiers (Common to Legendary) from four materials: Iron Ore, Thick Leather, Arcane Crystal and Dragon Scale. Higher tiers need a higher Hero Hall.
+- **Materials** drop from monster camps, ruins, the Elder Dragon, invasions, the arena, quests and the season pass.
+- **Talents:** one point per hero level, in three branches. Offense boosts the army, Defense boosts it when defending your castle, and Command boosts march speed.
+- **Might:** gear and talents add up to the hero's **might**, a percentage attack-and-health bonus for the whole army the hero leads.
+
+### Nemesis
+Defeat the same kingdom three times and it may become your **Nemesis** (☠ on the map).
+- **The threat:** it sends you a threatening letter, its army grows 40%, and it hunts you more often. Shields, beginner protection and faction peace still apply.
+- **Breaking it:** beat it again to win 300 gems and rare materials. It then bends the knee for 3 days.
+
+### Diplomacy (kingdom panel on the world map)
+- **Tribute:** cools a kingdom's grudge, and at zero it leaves you alone for 2 hours.
+- **Truce:** 12 hours during which neither side attacks. A Nemesis or a deep grudge refuses. You can break a truce, but they will remember.
+- **Hire:** pay an allied or friendly kingdom to march 60% of its army against a target you choose. You get a report of the result.
+
+### Arena (More → Arena)
+- **The ladder:** eight champions each week, with new ones every Monday. Your whole home army fights, but **troops never die**.
+- **Rewards:** wins pay gems and materials. A loss means a 5-minute rest.
 
 ### Rallies
 When you attack a kingdom, fort or the Citadel and you belong to a faction, you can start a **rally**.
@@ -129,7 +180,7 @@ When you attack a kingdom, fort or the Citadel and you belong to a faction, you 
 - **AI factions** rally on the Citadel too.
 
 ### Leaderboards
-**More → Leaderboards** has four tabs:
+**More → Ranks** has four tabs:
 - **Power:** all 61 kingdoms, including you.
 - **Factions:** total power, members and kills.
 - **Killers:** enemy troops killed across all battles.
@@ -150,6 +201,7 @@ Four themes for your **castle** and **every hero**: **Dunia** (Verdant Crown), *
 - **Bag items:** speed-ups (5 minutes, 1 hour), Peace Shields (2 hours, 8 hours), random and advanced teleports, and resource chests.
 - **Academy technologies:** Prosperity, Logistics, Fortification, Medicine, Scouting, Warfare and Agriculture.
 - **Trading Post:** exchange one resource for another at 30–58%, depending on its level.
+- **Redeem codes** can be entered from the first button in the More menu, from the Gem Shop, or from Settings.
 - **Gem Shop** (More → Gem Shop, or tap your gem counter):
 
 | Item | Price |
@@ -184,6 +236,9 @@ js/data/content.js    campaign, base-layout generator (used for AI kingdoms), st
 js/data/codes.js      redeem codes (hashed) + hash function
 js/core/state.js      your kingdom: economy, food, training, infirmary, items, research, power, save/validate
 js/core/throne.js     the Aurelion Citadel: weekly Throne War, rallies, coronation, Royal Court, leaderboards
+js/core/meta.js       daily quests, login, achievements, season pass, forge & talents, nemesis, diplomacy, arena
+js/core/invasion.js   Alien and Demon invasions
+js/ui/meta.js         screens for the systems above
 js/core/world.js      Eldoria: generation, AI simulation, marches, battles, reports, events, factions, teleport, offline catch-up
 js/core/audio.js      synthesized sound and music
 js/game/battle.js     battle engine (siege, raid, defense and campaign modes)
@@ -193,7 +248,7 @@ js/render/view.js     kingdom and battle renderer, camera
 js/render/worldview.js world map renderer
 js/ui/*.js            HUD, screens, world map UI, battle HUD
 js/main.js            app flow, game loop, offline summary
-tests/                run_tests.js (39 logic tests), browser_test.py (45 checks), throne_test.py (18 checks)
+tests/                run_tests.js (51 logic tests), browser_test.py (45), throne_test.py (20), meta_test.py (21)
 tools/                build.py (single file), codegen.js (redeem codes)
 ```
 
@@ -207,7 +262,7 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 hero=elara expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`. Rewards can be resources (gold, wood, stone, food, gems, runes), player XP, any of the 22 troop types, any of the 10 bag items, hero unlocks (`hero=elara`) and skins (`skin=castle:celestial`, `skin=hero:infernal:aldric`). Conditions: `start=`, `expires=` and `minCastle=`.
 
 ## Testing
-`node tests/run_tests.js`: 39 logic tests, including the Throne War schedule, a full war with AI rallies and coronation, player rallies, the Royal Court, march slots and skins.
+`node tests/run_tests.js`: 51 logic tests, including the Throne War schedule, a full war with AI rallies and coronation, player rallies, the Royal Court, march slots and skins.
 - Economy: production caps, food upkeep and desertion, batch training, the infirmary, items, techs and redeem codes.
 - Combat rules: counters and siege multipliers.
 - The world: generation, AI growth and AI-vs-AI wars, and the fairness rules (beginner protection, shields turning armies back, warning time).
@@ -222,7 +277,13 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **Shop and factions:** buying resources and items with gems, joining and leaving a faction.
 - **Other systems:** teleport, redeem, nine screens, persistence after reload, and phone portrait and landscape layouts. It also checks for console errors.
 
-`python3 tests/throne_test.py`: 18 checks. It shifts the page clock to Saturday 15:02, then checks the war banner, the Citadel panel, a rally with up to 9 allies, the Citadel battle report, burning and smoking castles, the coronation after 30 minutes, every leaderboard tab, the Royal Court, buying skins and march slots, and that there are no console errors.
+`python3 tests/throne_test.py`: 20 checks. It shifts the page clock to Saturday 15:02, then checks the war banner, the Citadel panel, a rally with up to 9 allies, the Citadel battle report, burning and smoking castles, the coronation after 30 minutes, every leaderboard tab, the Royal Court, buying skins and march slots, and that there are no console errors.
+
+`python3 tests/meta_test.py`: 21 checks.
+- **Progression:** daily quests and bonus chest, login streak, wearing a title, season free and premium claims, an arena fight with no deaths, forging and talents.
+- **Diplomacy and Nemesis:** truce, hiring mercenaries, and a Nemesis letter.
+- **Alien Invasion:** the banner, a wave on all 61 castles, your defense with no deaths, assaulting a mothership, and the end-of-event reward and ranking.
+- **Other:** the renamed king, and the phone layout.
 
 **Balance** was checked by simulation. A modest castle-3 player across six seeded worlds over 6 in-game hours sees 0–5 attacks and wins most defenses, though defending still costs troops. AI-vs-AI wars produce dozens of news items per hour.
 
@@ -232,8 +293,6 @@ Worth checking by hand on real devices: touch feel on the world map, audio on iO
 **Implemented:** everything described above.
 
 **Not yet, or simplified:**
-- **Simplified hero progression.** There is no equipment crafting or talent trees; heroes level from battle XP and resource training.
-- **No daily missions or achievements.**
 - **Forts:** captured forts give a production bonus and can be lost to AI expansionists, but you can't station a garrison there.
 - **AI-vs-AI fights use a formula,** not the visual engine. Only battles involving you can be watched.
 - **AI kingdoms don't gather resource tiles** or attack your gathering troops. Their economy is abstracted.

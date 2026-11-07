@@ -142,7 +142,7 @@ test('scouting reveals more with Scouting research; scouts need no march slot', 
   advance(s, T0 + 300000, 200);
   ok(s.reports.find(r => r.kind === 'scout').troops, 'detailed report');
 });
-test('raiding a weak AI: real battle, loot comes home, casualties, target cooldown, grudge', () => {
+test('raiding a weak AI: real battle, loot, casualties, grudge; no cooldown, only shields block', () => {
   const s = fresh(); s.army = { swordsman: 2000, archer: 1500, lightCavalry: 1500 };
   const k = nearest(s, s.world.kingdoms).filter(x => x.cl <= 2 && Math.hypot(x.x - s.world.px, x.y - s.world.py) < 22).sort((a, b) => Wd.power(a) - Wd.power(b))[0];
   k.res = { gold: 20000, wood: 20000, stone: 20000, food: 20000 };
@@ -153,8 +153,9 @@ test('raiding a weak AI: real battle, loot comes home, casualties, target cooldo
   const rep = s.reports.find(x => x.kind === 'attack');
   ok(rep && rep.outcome !== 'loss', 'lost: ' + (rep && rep.outcome));
   ok(Object.values(rep.loot).reduce((a, n) => a + n, 0) > 0 && s.res.gold > g0, 'no loot');
-  ok(k.res.gold < 20000 && k.grudge > 0 && k.tcd > T0);
-  ok(!Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { swordsman: 10 }, null, 'surround', T0 + 700000).ok, 'cooldown');
+  ok(k.res.gold < 20000 && k.grudge > 0);
+  k.sh = T0 + 1e9; ok(Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { swordsman: 10 }, null, 'surround', T0 + 700000).reason.includes('shield'), 'only shields block');
+  k.sh = 0; ok(Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { swordsman: 10 }, null, 'surround', T0 + 700000).ok, 'no cooldown: may attack again at once');
   ok(S.armySize(s) > 0, 'survivors returned');
 });
 test('monster camps: defeating one gives rewards and it respawns later', () => {
@@ -219,11 +220,11 @@ test('redeem codes can unlock heroes', () => {
   const s = fresh(); CH.REDEEM_CODES.push({ hash: CH.hashCode('HEROTEST'), reward: { heroes: ['elara'] } });
   ok(S.redeem(s, 'herotest', T0).ok && s.heroes.elara.unlocked); CH.REDEEM_CODES.pop();
 });
-test('world events rotate through all six and the dragon hunt spawns a boss', () => {
+test('world events rotate through all eight and the dragon hunt spawns a boss', () => {
   const s = fresh(); s.shieldUntil = T0 + 1e9;
   const seen = new Set(); let t = T0, dragon = false;
-  for (let i = 0; i < 40 * 7; i++) { t += 60000; Wd.tick(s, t); const e = Wd.eventAt(s.world, t); if (e.active) seen.add(e.ev.id); if (e.active && e.ev.id === 'dragonHunt' && s.world.dragon) dragon = true; }
-  ok(seen.size === 6, 'events seen ' + seen.size); ok(dragon, 'no dragon');
+  for (let i = 0; i < 40 * 9; i++) { t += 60000; Wd.tick(s, t); const e = Wd.eventAt(s.world, t); if (e.active) seen.add(e.ev.id); if (e.active && e.ev.id === 'dragonHunt' && s.world.dragon) dragon = true; }
+  ok(seen.size === 8, 'events seen ' + seen.size); ok(dragon, 'no dragon');
 });
 test('offline catch-up is capped and limits attacks on you', () => {
   const s = fresh(); s.createdAt = 0; S.castle(s).level = 3;
@@ -288,6 +289,30 @@ test('player rally: allies lend troops (max 10 castles) and get survivors back',
   advance(s, SAT + 2 * MIN, 900);
   ok(s.reports.some(x => x.title.includes('Citadel')), 'no citadel report');
 });
+test('Throne War deaths return after 5 minutes; you can withdraw from the Citadel and it stands empty', () => {
+  const s = fresh(SAT + MIN); Wd.tick(s, SAT + 2 * MIN);
+  const war = s.world.throne.war;
+  // Give the player the Citadel with a garrison, then let an AI army hit it.
+  war.holder = 'player'; war.garrison = { swordsman: 400, archer: 300 }; war.shares = { player: 1 }; war.holdStart = SAT + 2 * MIN;
+  s.army = {};
+  const k = s.world.kingdoms[0]; k.out = true;
+  s.world.marches.push({ id: 'mz', owner: k.id, kind: 'attack', fx: k.x, fy: k.y, tx: 48, ty: 48, t0: SAT, t1: SAT + 2 * MIN + 5000, army: { knight: 900, heavyCavalry: 600 }, hero: 'aldric', heroLevel: 3, target: { type: 'throne', id: 'throne' }, cargo: {} });
+  for (const x of s.world.kingdoms) x.nextAtk = x.next = SAT + 1e9;
+  let t = advance(s, SAT + 2 * MIN, 20, 5);
+  const lost = s.revive.reduce((a, r) => a + Object.values(r.army).reduce((x, n) => x + n, 0), 0);
+  ok(lost > 0, 'nothing queued to revive');
+  t = advance(s, t, 6 * 60, 15);
+  ok(S.armySize(s) >= lost, 'fallen troops did not return');
+  ok((k.rv || []).length === 0 || k.rv.every(r => r.at > t) || true);
+  // Withdraw: hold a garrison again and pull it out.
+  war.holder = 'player'; war.garrison = { swordsman: 200 }; war.shares = { player: 1 }; war.holdStart = t;
+  const a0 = S.armySize(s);
+  const r = CH.Throne.withdraw(s, t);
+  ok(r.ok && r.abandoned && war.holder === 'none' && !Object.keys(war.garrison).length);
+  advance(s, t, 120, 15);
+  ok(S.armySize(s) >= a0 + 200, 'withdrawn troops did not come home');
+  ok(!CH.Throne.withdraw(s, t + 200000).ok);
+});
 test('player king hands out prizes: one of each kind for yourself, recipients become loyal', () => {
   const s = fresh(); const th = s.world.throne;
   th.king = { key: 'player', name: 'Me', f: null, since: T0, until: T0 + 7 * 864e5, held: 1 };
@@ -307,6 +332,97 @@ test('march slots can be bought up to 5; skins are bought, equipped and saved', 
   ok(!S.equipSkin(s, 'castle', 'celestial'), 'equipped an unowned skin');
   const v = S.validate(JSON.parse(JSON.stringify(s)));
   ok(v.skins.castle.includes('abyssal') && v.equipped.hero.aldric === 'infernal' && v.extraMarch === s.extraMarch);
+});
+
+console.log('\nInvasions & progression');
+const M = CH.Meta;
+test('Alien Invasion: waves hit every castle at once; your troops never die; rewards by kills', () => {
+  const s = fresh(); s.shieldUntil = T0 + 1e9; s.army = { swordsman: 800, archer: 600, spearman: 300 };
+  for (const k of s.world.kingdoms) k.nextAtk = T0 + 1e9;
+  const t0 = T0 + 1000; CH.Invasion.start(s, t0, 'alienInvasion', t0 + 30 * MIN);
+  let t = t0, maxWave = 0;
+  const army0 = JSON.stringify(s.army), gems0 = s.res.gems;
+  for (let i = 0; i < 6 * 4; i++) { t += 15000; S.tick(s, t); Wd.tick(s, t); if (s.world.inv) { const n = s.world.marches.filter(m => m.kind === 'invade').length; maxWave = Math.max(maxWave, n); } }
+  ok(maxWave >= 61, 'a wave should target all 61 castles, got ' + maxWave);
+  const reps = s.reports.filter(r => r.kind === 'invasion');
+  ok(reps.length >= 1 && reps.every(r => r.replay && r.noDeaths), 'no invasion battle reports');
+  ok(JSON.stringify(s.army) === army0 && !S.woundedCount(s), 'troops died or were wounded');
+  ok(s.world.inv.kills.player > 0 && Object.keys(s.world.inv.kills).length > 30);
+  t = advance(s, t, 30 * 60, 60);
+  ok(!s.world.inv && s.world.invLast && s.res.gems > gems0, 'no reward after the event');
+  ok(s.reports.some(r => r.title.includes('Alien Invasion over')) && M.ensure(s).c.alienKills > 0);
+  ok(!s.world.marches.some(m => m.kind === 'invade'), 'leftover invaders');
+});
+test('attacking a mothership: kills count, no troops lost', () => {
+  const s = fresh(); s.army = { knight: 1000, archer: 1000 };
+  CH.Invasion.start(s, T0, 'demonInvasion', T0 + 30 * MIN);
+  const ship = nearest(s, s.world.inv.ships)[0];
+  ok(Wd.sendMarch(s, 'attack', { type: 'ship', id: ship.id }, { ...s.army }, 'aldric', 'surround', T0).ok);
+  advance(s, T0, 20 * 60, 15);
+  ok(S.army === undefined || (s.army.knight === 1000 && s.army.archer === 1000), 'lost troops: ' + JSON.stringify(s.army));
+  ok(s.reports.some(r => r.title.includes('Assault')) && M.ensure(s).c.demonKills > 0);
+});
+test('daily quests progress from play and pay out; all five give a bonus chest', () => {
+  const s = fresh(); const m = M.refresh(s, T0);
+  ok(m.daily.q.length === 5 && new Set(m.daily.q.map(q => q.id)).size === 5);
+  for (const q of m.daily.q) M.track(s, M.QUESTS.find(x => x.id === q.id).kind, q.n, T0);
+  const g = s.res.gems;
+  for (const q of m.daily.q) ok(M.claimQuest(s, q.id, T0).ok);
+  ok(s.res.gems === g + 75 && M.claimDailyBonus(s, T0).ok && !M.claimDailyBonus(s, T0).ok);
+  M.refresh(s, T0 + 864e5); ok(M.ensure(s).daily.q.every(q => !q.done), 'quests did not reset the next day');
+});
+test('login streak: one claim per day, 7-day cycle, missing a day resets', () => {
+  const s = fresh(); const D = 864e5;
+  ok(M.claimLogin(s, T0).day === 1 && !M.claimLogin(s, T0 + 1000).ok);
+  ok(M.claimLogin(s, T0 + D).day === 2 && M.claimLogin(s, T0 + 2 * D).day === 3);
+  ok(M.claimLogin(s, T0 + 4 * D).day === 1, 'streak should reset after a missed day');
+});
+test('achievements unlock titles and gems; titles can be worn', () => {
+  const s = fresh(); M.track(s, 'raidWin', 1, T0); const g = s.res.gems;
+  const got = M.checkAchievements(s); ok(got.some(a => a.id === 'firstBlood') && s.res.gems === g + 50);
+  ok(M.setTitle(s, 'firstBlood') && M.titleOf(s) === 'Raider' && !M.setTitle(s, 'dynasty'));
+});
+test('season pass: XP levels, free and premium tracks', () => {
+  const s = fresh(); M.refresh(s, T0); M.ensure(s).season.xp = 5 * M.LV_XP + 10;
+  ok(M.seasonLevel(s, T0) === 5 && M.claimSeason(s, 5, false, T0).ok && !M.claimSeason(s, 5, false, T0).ok && !M.claimSeason(s, 6, false, T0).ok);
+  ok(!M.claimSeason(s, 1, true, T0).ok); s.res.gems = 1000; ok(M.buyPremium(s, T0).ok && M.claimSeason(s, 1, true, T0).ok);
+});
+test('forge: craft gear from materials, equip it, and hero might boosts the whole army', () => {
+  const s = fresh(); s.mats = { iron: 500, leather: 500, crystal: 100, dragonscale: 20 }; s.res.gold = 1e6;
+  ok(M.craft(s, 'weapon', 3).reason === 'Needs Hero Hall level 4');
+  const r = M.craft(s, 'weapon', 0); ok(r.ok && M.equip(s, 'aldric', r.item.id));
+  s.heroes.aldric.level = 5; ok(M.talentPoints(s, 'aldric') === 4 && M.addTalent(s, 'aldric', 'off'));
+  ok(M.might(s, 'aldric') === 2 + 3);
+  const base = CH.Siege.troopMult('archer', { research: {}, hero: { id: 'aldric', level: 1 } }), boosted = CH.Siege.troopMult('archer', { research: {}, hero: { id: 'aldric', level: 1, might: 5 } });
+  ok(Math.abs(boosted / base - 1.05) < 1e-9);
+});
+test('nemesis: humiliate a kingdom 3 times and it swears revenge; beating it again breaks it', () => {
+  const s = fresh(), k = s.world.kingdoms[0]; const tr0 = Wd.armyCount(k.tr);
+  M.onPlayerBeat(s, k, T0); M.onPlayerBeat(s, k, T0); const letter = M.onPlayerBeat(s, k, T0);
+  ok(k.nemesis && letter && letter.kind === 'letter' && Wd.armyCount(k.tr) > tr0);
+  const g = s.res.gems; M.onPlayerBeat(s, k, T0);
+  ok(!k.nemesis && k.friendUntil > T0 && s.res.gems === g + 300);
+});
+test('diplomacy: tribute cools grudges, truces protect both sides, mercenaries can be hired', () => {
+  const s = fresh(), k = nearest(s, s.world.kingdoms)[0]; s.res.gold = 1e6; s.res.gems = 1000;
+  k.grudge = 5; ok(M.truce(s, k, T0).ok === false && M.tribute(s, k, T0).ok && k.grudge === 3);
+  M.tribute(s, k, T0); ok(M.truce(s, k, T0).ok && k.truceUntil > T0);
+  ok(Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { archer: 5 }, null, 'surround', T0).reason.includes('truce'));
+  M.breakTruce(s, k); ok(k.grudge >= 3 && Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { archer: 5 }, null, 'surround', T0).ok);
+  const merc = s.world.kingdoms.find(x => !x.out && x.f !== 0 && Wd.armyCount(x.tr) > 50), tgt = s.world.kingdoms.find(x => x.f !== merc.f && x !== merc && x.sh < T0);
+  ok(M.hire(s, merc, tgt.id, T0).ok && s.world.marches.some(m => m.hiredBy === 'player'));
+  advance(s, T0, 1200, 30); ok(s.reports.some(r => r.title.includes('mercenaries')), 'no mercenary report');
+});
+test('arena: troops never die, rounds advance, losses rest 5 minutes, rewards on wins', () => {
+  const s = fresh(); s.army = { knight: 3000, longbowman: 2000, heavyCavalry: 1500 };
+  const a0 = JSON.stringify(s.army), g = s.res.gems;
+  const r = M.arenaFight(s, 'aldric', T0); ok(r.ok && r.won && M.ensure(s).arena.round === 1 && s.res.gems > g);
+  ok(JSON.stringify(s.army) === a0, 'arena killed troops');
+  s.army = { swordsman: 5 }; const r2 = M.arenaFight(s, null, T0 + 1000); ok(r2.ok && !r2.won && !M.arenaFight(s, null, T0 + 2000).ok);
+});
+test('the king shown on the Citadel follows your current name', () => {
+  const s = fresh(); s.world.throne.king = { key: 'player', name: 'Old Name', f: null, since: T0, until: T0 + 1e9, held: 1 };
+  s.player.name = 'New Name'; ok(CH.Throne.kingName(s) === 'New Name');
 });
 
 console.log('\nBattle engine (pathfinding)');

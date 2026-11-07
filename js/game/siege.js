@@ -38,6 +38,7 @@ CH.Siege = (function () {
     const d = CH.TROOPS[type];
     let m = CH.RESEARCH.troopMult((opts.research && opts.research[type]) || 1);
     if (opts.hero && d && CH.HEROES[opts.hero.id].cls === d.cls) m *= 1 + CH.HEROES[opts.hero.id].bonus * (1 + 0.1 * (opts.hero.level - 1));
+    if (opts.hero && opts.hero.might) m *= 1 + opts.hero.might / 100; // gear + talents
     return m;
   }
 
@@ -48,7 +49,8 @@ CH.Siege = (function () {
    * dir: unit vector from attacker toward defender on the world map
    */
   function build({ attacker, defender, formation = 'surround', dir = { x: 1, y: 0 }, seed = 1, playerSide = 'atk' }) {
-    const atkSq = squads(attacker.army).map(q => ({ ...q, mult: troopMult(q.type, attacker) * (1 + (attacker.atkBonus || 0)) }));
+    const atkSq = squads(attacker.army || {}).map(q => ({ ...q, mult: troopMult(q.type, attacker) * (1 + (attacker.atkBonus || 0)) }))
+      .concat(attacker.monsters ? squads(attacker.monsters, 30).map(q => ({ ...q, monster: true, mult: attacker.monsterMult || 1 })) : []);
     let defSq = [];
     // Defenders fight on home turf: +15%.
     if (defender.army) defSq = squads(defender.army).map(q => ({ ...q, mult: troopMult(q.type, defender) * 1.15 }));

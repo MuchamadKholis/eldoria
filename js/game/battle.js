@@ -1035,9 +1035,9 @@
       while (this.deployQ.length && this.deployQ[0].t <= this.time) {
         const d = this.deployQ.shift();
         if (d.hero) {
-          const u = this.spawnUnit(CH.HEROES[d.hero.id], 'atk', d.x, d.y, { mult: CH.State.heroMult(d.hero.level) * 1.2, hero: d.hero.id, heroLevel: d.hero.level });
+          const u = this.spawnUnit(CH.HEROES[d.hero.id], 'atk', d.x, d.y, { mult: CH.State.heroMult(d.hero.level) * 1.2 * (1 + (d.hero.might || 0) / 100), hero: d.hero.id, heroLevel: d.hero.level });
           u.autoHero = true; u.abilityCd = 3; u.skin = d.hero.skin;
-        } else this.squads.push(this.spawnSquad(CH.TROOPS[d.sq.type], 'atk', d.sq, d.x, d.y));
+        } else this.squads.push(this.spawnSquad(d.sq.monster ? CH.ENEMIES[d.sq.type] : CH.TROOPS[d.sq.type], 'atk', d.sq, d.x, d.y));
       }
     }
     checkSiegeEnd() {

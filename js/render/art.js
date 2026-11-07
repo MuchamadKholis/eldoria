@@ -430,6 +430,35 @@ CH.Art = (function () {
       line(c, -s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14); line(c, s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14);
       c.save(); c.translate(0, -s * 1.8); c.rotate(o.swing ? 0.9 : -0.6); line(c, -s * 0.6, 0, s * 1.4, 0, '#7a5a3a', s * 0.12); rect(c, -s * 0.8, -s * 0.1, s * 0.4, s * 0.5, '#4a4038'); c.restore();
     },
+    alienDrone(c, s, a) {
+      const b = Math.sin(a * 8) * s * 0.1;
+      ell(c, 0, -s * 1.1 + b, s * 1.1, s * 0.35, '#9aa6b8'); ell(c, 0, -s * 1.2 + b, s * 0.9, s * 0.22, '#c8d2e0');
+      ell(c, 0, -s * 1.4 + b, s * 0.45, s * 0.35, 'rgba(120,255,170,0.85)');
+      for (let i = -2; i <= 2; i++) circle(c, i * s * 0.38, -s * 1.08 + b, s * 0.08, i % 2 ? '#5fffa0' : '#ffe05a');
+    },
+    alienTrooper(c, s, a, o) {
+      const k = Math.sin(a * 12) * s * 0.18;
+      line(c, -s * 0.2, -s * 0.6, -s * 0.25 - k, 0, '#8a92a8', s * 0.18); line(c, s * 0.2, -s * 0.6, s * 0.25 + k, 0, '#8a92a8', s * 0.18);
+      ell(c, 0, -s * 0.95, s * 0.36, s * 0.45, '#b8c2d4');
+      ell(c, 0, -s * 1.75, s * 0.5, s * 0.55, '#9fd8a8');
+      ell(c, -s * 0.2, -s * 1.75, s * 0.15, s * 0.24, '#111'); ell(c, s * 0.2, -s * 1.75, s * 0.15, s * 0.24, '#111');
+      rect(c, s * 0.25, -s * 1.05, s * 0.75, s * 0.16, '#555c6a'); circle(c, s * 1.0, -s * 0.97, s * 0.12, o.swing ? '#5fffa0' : '#2a8a5a');
+    },
+    alienBrute(c, s, a) {
+      const k = Math.sin(a * 9) * s * 0.15;
+      line(c, -s * 0.35, -s * 0.5, -s * 0.4 - k, 0, '#4a5a3a', s * 0.3); line(c, s * 0.35, -s * 0.5, s * 0.4 + k, 0, '#4a5a3a', s * 0.3);
+      ell(c, 0, -s * 1.0, s * 0.8, s * 0.65, '#6a7a4a'); ell(c, 0, -s * 1.1, s * 0.6, s * 0.45, '#8a9a5a');
+      rect(c, -s * 0.7, -s * 1.35, s * 1.4, s * 0.2, '#9aa6b8');
+      circle(c, 0, -s * 1.75, s * 0.32, '#6a7a4a'); for (const dx of [-0.12, 0.12]) circle(c, dx * s, -s * 1.8, s * 0.07, '#ff3a3a');
+      line(c, -s * 0.8, -s * 1.1, -s * 1.1, -s * 0.5, '#4a5a3a', s * 0.25); line(c, s * 0.8, -s * 1.1, s * 1.1, -s * 0.5, '#4a5a3a', s * 0.25);
+    },
+    alienOverlord(c, s, a) {
+      const b = Math.sin(a * 3) * s * 0.08;
+      for (let i = 0; i < 6; i++) { const x = (i - 2.5) * s * 0.25; c.beginPath(); c.moveTo(x, -s * 0.9 + b); c.quadraticCurveTo(x + Math.sin(a * 6 + i) * s * 0.3, -s * 0.4, x + Math.sin(a * 4 + i) * s * 0.2, 0); c.strokeStyle = '#7a4aa8'; c.lineWidth = s * 0.1; c.stroke(); }
+      ell(c, 0, -s * 1.3 + b, s * 0.8, s * 0.55, '#c88ad8'); ell(c, 0, -s * 1.45 + b, s * 0.6, s * 0.35, '#e0a8f0');
+      ell(c, 0, -s * 1.35 + b, s * 0.95, s * 0.75, 'rgba(160,240,255,0.25)');
+      ell(c, -s * 0.25, -s * 1.15 + b, s * 0.12, s * 0.16, '#111'); ell(c, s * 0.25, -s * 1.15 + b, s * 0.12, s * 0.16, '#111');
+    },
     king: (c, s, a, o) => humanoid(c, s, a, { body: '#b02a2a', legs: '#5a1a1a', crown: true, cape: '#7a1a1a', weapon: 'sword', shield: P.gold, belt: P.gold, hair: '#c9a24a', swing: o.swing }),
     queen: (c, s, a, o) => humanoid(c, s, a, { body: '#6a3ab0', robe: true, crown: true, hair: '#e8c060', cape: '#4a2a8a', weapon: 'bow', swing: o.swing }),
     archmage: (c, s, a, o) => humanoid(c, s, a, { body: '#e8e4f8', robe: true, hat: '#3a3ab0', weapon: 'staff', orb: '255,200,120', hair: '#ddd', swing: o.swing }),

@@ -321,6 +321,7 @@ CH.View = (function () {
     for (const p of b.proj) {
       switch (p.kind) {
         case 'arrow': { const a = p.a || 0; A.line(c, p.x - Math.cos(a) * 11, p.y - Math.sin(a) * 11, p.x, p.y, '#d9b16a', 1.6); A.line(c, p.x - Math.cos(a) * 2, p.y - Math.sin(a) * 2, p.x + Math.cos(a) * 2, p.y + Math.sin(a) * 2, '#eee', 2.2); break; }
+        case 'laser': { const a = p.a || Math.atan2(p.vy || 0, p.vx || 1); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#5fffa0', 3); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#eafff2', 1); break; }
         case 'rock': A.circle(c, p.x, p.y, 5, '#8a7e6a'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.8, '#b8ae9a'); break;
         case 'ball': A.circle(c, p.x, p.y, 4.5, '#1c1b20'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.5, 'rgba(255,255,255,0.4)'); break;
         case 'orb': A.glow(c, p.x, p.y, 12, '190,150,255', 0.8); A.circle(c, p.x, p.y, 3, '#fff'); break;

@@ -98,14 +98,15 @@ CH.WorldView = (function () {
       if (f.mon) { for (const m of w.camps) if (vis(m) && !m.dead) this.camp(c, m); for (const r of w.ruins) if (vis(r) && !r.dead) this.ruin(c, r); if (w.dragon) this.dragonIcon(c, w.dragon, now); }
       for (const fo of w.forts) if (vis(fo)) this.fort(c, fo);
       if (w.throne) this.citadel(c, w.throne, now, s);
+      if (w.inv) for (const sh of w.inv.ships) this.ship(c, sh, w.inv.id, now);
       const pPow = CH.State.power(s);
       if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) this.kingdom(c, k2, now, false);
       this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name, burn: w.pburn, smoke: w.psmoke, skin: s.equipped && s.equipped.castle }, now, true);
       // Marches
       for (const m of w.marches) {
-        const mine = m.owner === 'player', hostile = m.target && m.target.type === 'player';
+        const mine = m.owner === 'player', hostile = m.target && m.target.type === 'player', inv = m.kind === 'invade';
         if (!mine && !hostile && z < 0.3) continue;
-        const col = mine ? '#5fb0ff' : hostile ? '#ff5a4a' : 'rgba(230,230,230,0.55)';
+        const col = mine ? '#5fb0ff' : inv ? (CH.Invasion.KINDS[m.inv] || {}).color || '#5fffa0' : hostile ? '#ff5a4a' : 'rgba(230,230,230,0.55)';
         const sx = (m.fx + 0.5) * TW, sy = (m.fy + 0.5) * TW, ex = (m.tx + 0.5) * TW, ey = (m.ty + 0.5) * TW;
         const p = m.kind === 'gathering' ? 1 : CH.util.clamp((now - m.t0) / (m.t1 - m.t0), 0, 1);
         c.save(); c.setLineDash([10, 8]); c.lineDashOffset = -now / 40; c.strokeStyle = col; c.lineWidth = (mine || hostile ? 3 : 1.5) / Math.max(0.5, z);
@@ -128,14 +129,30 @@ CH.WorldView = (function () {
       if (z > 0.32) {
         c.textAlign = 'center'; c.font = '800 11px Nunito, system-ui, sans-serif';
         const label = (x, y, txt, col, dy) => { const p = this.toScreen((x + 0.5) * TW, (y + 0.5) * TW + dy); c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.75)'; c.strokeText(txt, p.x, p.y); c.fillStyle = col; c.fillText(txt, p.x, p.y); };
-        if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) label(k2.x, k2.y, k2.name + ' · ' + CH.util.fmt(CH.World.power(k2)), k2.sh > now ? '#9fd4ff' : CH.FACTIONS[k2.f].color, 34);
-        label(w.px, w.py, '★ ' + s.player.name, '#ffe08a', 36);
+        if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) label(k2.x, k2.y, (k2.nemesis ? '☠ ' : k2.truceUntil > now ? '🕊 ' : '') + k2.name + ' · ' + CH.util.fmt(CH.World.power(k2)), k2.nemesis ? '#ff5a4a' : k2.sh > now ? '#9fd4ff' : CH.FACTIONS[k2.f].color, 34);
+        label(w.px, w.py, '★ ' + s.player.name + (CH.Meta.titleOf(s) ? ' «' + CH.Meta.titleOf(s) + '»' : ''), '#ffe08a', 36);
         if (w.throne) { const th = w.throne, war = th.war && !th.war.ended && now < th.war.end ? th.war : null;
           label(th.x, th.y, '👑 ' + CH.THRONE.name, '#ffe9a8', 92);
-          label(th.x, th.y, war ? '⚔ Held by ' + CH.Throne.keyName(s, war.holder) : th.king ? 'King: ' + th.king.name : 'No king', war ? '#ff9a8a' : '#e8f0ff', 108); }
+          label(th.x, th.y, war ? '⚔ Held by ' + CH.Throne.keyName(s, war.holder) : th.king ? 'King: ' + CH.Throne.kingName(s) : 'No king', war ? '#ff9a8a' : '#e8f0ff', 108); }
         if (z > 0.6 && f.mon) for (const m of w.camps) if (vis(m) && !m.dead) label(m.x, m.y, 'Lv ' + m.lvl, '#ffb3a8', 24);
         if (z > 0.6 && f.res) for (const t of w.tiles) if (vis(t)) label(t.x, t.y, 'Lv ' + t.lvl, '#e8f2d8', 22);
       }
+    }
+    /** Invasion mothership (aliens) or hell portal (demons). */
+    ship(c, sh, kind, now) {
+      const x = (sh.x + 0.5) * TW, y = (sh.y + 0.5) * TW, t = now / 1000;
+      c.save(); c.translate(x, y);
+      if (CH.Invasion.KINDS[kind].ship === 'saucer') {
+        c.globalCompositeOperation = 'lighter'; A.poly(c, [-22, 0, 22, 0, 40, 70, -40, 70], 'rgba(120,255,170,' + (0.18 + Math.sin(t * 3) * 0.06) + ')'); A.glow(c, 0, -30, 70, '120,255,170', 0.3); c.globalCompositeOperation = 'source-over';
+        const b = Math.sin(t * 2) * 4;
+        A.ell(c, 0, -30 + b, 62, 16, '#8a94a8'); A.ell(c, 0, -34 + b, 48, 10, '#c4ccdc'); A.ell(c, 0, -44 + b, 22, 16, 'rgba(140,255,190,0.9)');
+        for (let i = 0; i < 8; i++) A.circle(c, Math.cos(i / 8 * 6.283 + t) * 50, -30 + b + Math.sin(i / 8 * 6.283 + t) * 10, 3, i % 2 ? '#5fffa0' : '#ffe05a');
+      } else {
+        c.globalCompositeOperation = 'lighter'; A.glow(c, 0, -10, 70, '200,90,255', 0.35); c.globalCompositeOperation = 'source-over';
+        for (let i = 0; i < 5; i++) { c.beginPath(); c.ellipse(0, -10, 40 - i * 7, 26 - i * 4, t * (i % 2 ? 1.5 : -1.5), 0, 6.283); c.strokeStyle = i % 2 ? '#c06bff' : '#ff4a6a'; c.lineWidth = 4; c.stroke(); }
+        A.ell(c, 0, -10, 12, 8, '#1a0a20');
+      }
+      c.restore();
     }
     /** The Aurelion Citadel: the Throne of Eldoria. */
     citadel(c, th, now, s) {

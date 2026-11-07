@@ -20,14 +20,20 @@ CH.Throne = (function () {
   /** The war window for the week containing T (local time). */
   function warWindow(T) {
     const d = new Date(T);
-    const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() - TH.warDay + 7) % 7), TH.warHour, 0, 0, 0);
+    const mm = TH.warMinute || 0;
+    const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() - TH.warDay + 7) % 7), TH.warHour, mm, 0, 0);
     let start = sat.getTime();
-    if (start > T) start = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() - 7, TH.warHour).getTime();
+    if (start > T) start = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() - 7, TH.warHour, mm).getTime();
     const end = start + TH.warMinutes * MIN;
-    const next = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), new Date(start).getDate() + 7, TH.warHour).getTime();
+    const next = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), new Date(start).getDate() + 7, TH.warHour, mm).getTime();
     return { start, end, next, active: T >= start && T < end };
   }
 
+  /** e.g. "Saturday 15:00" — built from the schedule in defs.js. */
+  function warLabel() {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[TH.warDay] + ' ' + String(TH.warHour).padStart(2, '0') + ':' + String(TH.warMinute || 0).padStart(2, '0');
+  }
   function freshPrizes() { const out = []; for (const p of TH.prizes) for (let i = 0; i < p.count; i++) out.push({ id: p.tier + i, tier: p.tier, given: null }); return out; }
 
   /** Adds the Citadel to a world (new or old save) and clears the land around it. */
@@ -47,8 +53,42 @@ CH.Throne = (function () {
     return w.throne;
   }
 
-  const keyName = (s, key) => key === 'player' ? s.player.name : key === 'guard' ? 'Citadel Guardians' : (W(s).kingdoms.find(k => k.id === key) || { name: '?' }).name;
-  const keyFaction = (s, key) => key === 'player' ? s.faction : key === 'guard' ? null : (W(s).kingdoms.find(k => k.id === key) || {}).f;
+  const REVIVE_MS = 5 * MIN;
+  /** Troops that fall in the Throne War are not lost: they return 5 minutes later. */
+  function reviveLater(s, key, army, T) {
+    if (!armyCount(army) || key === 'guard' || key === 'none') return;
+    const a = {}; for (const t in army) if (army[t] > 0) a[t] = Math.floor(army[t]);
+    if (key === 'player') (s.revive = s.revive || []).push({ at: T + REVIVE_MS, army: a });
+    else { const k = W(s).kingdoms.find(x => x.id === key); if (k) (k.rv = k.rv || []).push({ at: T + REVIVE_MS, army: a }); }
+  }
+  /** Splits a loss of the garrison between its owners by share. */
+  function reviveGarrisonLoss(s, war, lost, T) {
+    for (const key in war.shares) { const part = {}; for (const t in lost) part[t] = Math.floor(lost[t] * war.shares[key]); reviveLater(s, key, part, T); }
+  }
+  /** Pull your troops out of the Citadel. If you hold it, you abandon it. */
+  function withdraw(s, now = Date.now()) {
+    const w = W(s), th = w.throne, war = th && th.war;
+    if (!war || war.ended || !(war.shares && war.shares.player > 0)) return { ok: false, reason: 'You have no troops in the Citadel' };
+    const mine = war.holder === 'player';
+    let sent = 0;
+    if (mine) {
+      sent = Math.round(armyCount(war.garrison) * war.shares.player);
+      closeHold(war, now);
+      releaseGarrison(s, now); // everyone's troops go home
+      war.holder = 'none'; war.holderF = null; war.garrison = {}; war.shares = {}; war.holdStart = now;
+      w.news.unshift({ t: now, text: s.player.name + ' withdrew from the ' + TH.name + '. It stands empty!', kind: 'war' });
+    }
+    return { ok: true, abandoned: mine, troops: sent };
+  }
+  function garrisonOf(s) {
+    const war = W(s).throne && W(s).throne.war;
+    if (!war || war.ended || !(war.shares && war.shares.player > 0)) return null;
+    const a = {}; for (const t in war.garrison) { const n = Math.floor(war.garrison[t] * war.shares.player); if (n) a[t] = n; }
+    return a;
+  }
+  const keyName = (s, key) => key === 'player' ? s.player.name : key === 'guard' ? 'Citadel Guardians' : key === 'none' ? 'Nobody (empty)' : (W(s).kingdoms.find(k => k.id === key) || { name: '?' }).name;
+  const keyFaction = (s, key) => key === 'player' ? s.faction : (key === 'guard' || key === 'none') ? null : (W(s).kingdoms.find(k => k.id === key) || {}).f;
+  const kingName = s => { const t = W(s) && W(s).throne; return t && t.king ? keyName(s, t.king.key) : null; };
   const isPlayerKing = s => { const t = W(s) && W(s).throne; return !!(t && t.king && t.king.key === 'player' && t.king.until > Date.now()); };
 
   /** Guardians scale with the strongest kingdoms so the first capture is a real fight. */
@@ -88,7 +128,7 @@ CH.Throne = (function () {
   function addKills(s, key, n) {
     const w = W(s), war = w.throne.war;
     if (war) war.kills[key] = (war.kills[key] || 0) + n;
-    if (key === 'player') s.stats.kills += n; else { const k = w.kingdoms.find(x => x.id === key); if (k) k.kills += n; }
+    if (key === 'player') { s.stats.kills += n; CH.Meta.track(s, 'kills', n); } else { const k = w.kingdoms.find(x => x.id === key); if (k) k.kills += n; }
   }
 
   /** Called every world step. */
@@ -114,7 +154,8 @@ CH.Throne = (function () {
       const [key, ms] = ranking[0];
       th.king = { key, name: war.names[key] || keyName(s, key), f: keyFaction(s, key), since: T, until: warWindow(T).next, held: ms };
       th.prizes = freshPrizes();
-      th.history.unshift({ t: T, name: th.king.name, held: ms }); th.history.length = Math.min(th.history.length, 10);
+      th.history.unshift({ t: T, key, name: th.king.name, held: ms });
+      if (key === 'player') CH.Meta.track(s, 'crowned', 1, T); th.history.length = Math.min(th.history.length, 10);
       w.news.unshift({ t: T, text: '👑 ' + th.king.name + ' held the ' + TH.name + ' for ' + U.time(ms / 1000) + ' and is crowned ' + TH.title + '!', kind: 'event' });
       th.burn = 0; th.smoke = T + 10 * MIN;
       if (key !== 'player') aiKingGifts(s, T);
@@ -218,13 +259,22 @@ CH.Throne = (function () {
     if (war.holder === key) { for (const t in m.army) war.garrison[t] = (war.garrison[t] || 0) + m.army[t]; freeAllies(s, m); return; }
     war.attacks++;
     const atkArmy = merged(m), defKey = war.holder;
+    if (defKey === 'none' || !armyCount(war.garrison) && defKey !== 'guard') {
+      const split0 = { own: { ...m.army }, allies: (m.allies || []).map(x => ({ id: x.id, army: { ...x.army } })) };
+      releaseGarrison(s, T);
+      setHolder(s, key, atkArmy, sharesOf(m, split0), T);
+      freeAllies(s, m); if (owner) owner.out = false;
+      w.news.unshift({ t: T, text: '👑 ' + keyName(s, key) + ' marched into the empty ' + TH.name + '!', kind: 'war' });
+      if (key === 'player') { const r = CH.World.addReport(s, { t: T, kind: 'attack', you: 'atk', outcome: 'win', title: '👑 You occupied the empty ' + TH.name + '!', coords: [th.x, th.y] }); ev.push({ kind: 'report', report: r }); }
+      return;
+    }
     let outcome, sent = atkArmy, left = {}, defLost = {}, rep = null;
     if (key === 'player' || defKey === 'player') {
       // Full engine battle at the Citadel.
       const playerAtk = key === 'player';
       const hero = playerAtk ? (m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero) } : null) : { id: m.hero, level: m.heroLevel };
       const cfg = CH.Siege.build({
-        attacker: { name: keyName(s, key), army: atkArmy, hero, research: playerAtk ? s.research.troops : {}, atkBonus: playerAtk ? 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) : 0.03 * (owner ? owner.cl : 1) },
+        attacker: { name: keyName(s, key), army: atkArmy, hero: hero && playerAtk ? { ...hero, might: CH.Meta.might(s, hero.id) } : hero, research: playerAtk ? s.research.troops : {}, atkBonus: playerAtk ? 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) : 0.03 * (owner ? owner.cl : 1) },
         defender: { name: TH.name + ' (' + keyName(s, defKey) + ')', kind: 'camp', cl: 8, layout: layout(), army: defKey === 'guard' ? null : war.garrison, monsters: null, heroes: [], research: defKey === 'player' ? s.research.troops : {}, fortBonus: 0.2 },
         formation: m.formation || 'surround', dir: { x: th.x - m.fx, y: th.y - m.fy }, seed: (T % 1e9) | 0, playerSide: playerAtk ? 'atk' : 'def',
       });
@@ -240,11 +290,14 @@ CH.Throne = (function () {
       outcome = res.win ? 'win' : 'loss';
       for (const t in atkArmy) left[t] = Math.floor(atkArmy[t] * (1 - res.atkLoss));
       for (const t in war.garrison) { const n = Math.floor(war.garrison[t] * res.defLoss); defLost[t] = n; war.garrison[t] -= n; }
-      if (res.win) war.garrison = {};
     }
+    // Throne War deaths are not permanent: everyone's fallen return in 5 minutes.
+    reviveGarrisonLoss(s, war, defLost, T);
     addKills(s, key, sum(defLost));
     if (defKey !== 'guard') addKills(s, defKey, sum(sent) - sum(left));
     const split = splitSurvivors(m, sent, left);
+    { const lostOwn = {}; for (const t in m.army) { const n = m.army[t] - (split.own[t] || 0); if (n > 0) lostOwn[t] = n; } reviveLater(s, key, lostOwn, T);
+      for (const x of m.allies || []) { const sv = (split.allies.find(a => a.id === x.id) || { army: {} }).army, l = {}; for (const t in x.army) { const n = x.army[t] - (sv[t] || 0); if (n > 0) l[t] = n; } reviveLater(s, x.id, l, T); } }
     if (outcome === 'win') {
       // The old holder's surviving garrison (if any) goes home; the attackers move in.
       releaseGarrison(s, T);
@@ -266,7 +319,7 @@ CH.Throne = (function () {
         atk: { name: keyName(s, key), sent: rep.r.atk.sent, lost: rep.r.atk.lost, hero: m.hero, helpers: m.rally ? (m.allies || []).length : 0 }, def: { name: keyName(s, defKey), sent: rep.r.def.sent, lost: rep.r.def.lost },
         destruction: rep.r.destruction, dmg: rep.r.dmg, time: Math.round(rep.r.time), replay: rep.cfg, coords: [th.x, th.y],
       });
-      if (playerAtk) { const lost = {}; for (const t in m.army) { const n = m.army[t] - (split.own[t] || 0); if (n > 0) lost[t] = Math.floor(n * 0.5); } r.casualties = CH.State.addCasualties(s, lost); }
+      r.revive = true;
       ev.push({ kind: 'report', report: r, alert: !playerAtk });
     }
   }
@@ -285,12 +338,12 @@ CH.Throne = (function () {
   function leaderboards(s) {
     const w = W(s);
     const rows = w.kingdoms.map(k => ({ key: k.id, name: k.name, f: k.f, power: CH.World.power(k), kills: k.kills || 0 }));
-    rows.push({ key: 'player', name: s.player.name, f: s.faction, power: CH.State.power(s), kills: s.stats.kills || 0, me: true });
+    rows.push({ key: 'player', name: s.player.name + (CH.Meta.titleOf(s) ? ' «' + CH.Meta.titleOf(s) + '»' : ''), f: s.faction, power: CH.State.power(s), kills: s.stats.kills || 0, me: true });
     const power = rows.slice().sort((a, b) => b.power - a.power);
     const kills = rows.slice().sort((a, b) => b.kills - a.kills);
     const factions = CH.FACTIONS.map(f => { const m = rows.filter(r => r.f === f.id); return { f, members: m.length, power: m.reduce((a, r) => a + r.power, 0), kills: m.reduce((a, r) => a + r.kills, 0) }; }).sort((a, b) => b.power - a.power);
     return { power, kills, factions };
   }
 
-  return { warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
+  return { kingName, withdraw, garrisonOf, reviveLater, REVIVE_MS, warLabel, warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
 })();

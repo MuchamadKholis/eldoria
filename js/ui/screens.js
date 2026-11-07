@@ -266,6 +266,8 @@ CH.Screens = (function () {
       title: 'World events',
       html: '<div class="panel ev-now"><span class="kicker">' + (e.active ? 'Live now · ends in ' + U.time((e.ends - now) / 1000) : 'Next event in ' + U.time((e.next - now) / 1000)) + '</span><h3>' + e.ev.name + '</h3><p>' + e.ev.desc + '</p>' +
         (e.active && e.ev.id === 'dragonHunt' && w.dragon ? '<button class="btn btn-gold" data-act="dragon">Find the dragon</button>' : '') + '</div>' +
+        (w.inv || w.invLast ? '<h4 class="group">' + CH.Invasion.KINDS[(w.inv || w.invLast).id].icon + ' Invasion kill ranking' + (w.inv ? ' (live)' : ' (last)') + '</h4><div class="ranks">' + CH.Invasion.ranking(s).slice(0, 10).map((r, i) => '<div class="rank-row' + (r.key === 'player' ? ' me' : '') + '"><span class="rk">' + (i + 1) + '</span><b>' + esc(r.name) + '</b><span></span><span class="rv">' + U.fmt(r.kills) + ' ☠</span></div>').join('') + '</div>' +
+          (w.inv ? '<p class="muted">Your reward if it ended now: ' + UI.reward(CH.Invasion.rewardFor(w.inv.kills.player || 0, CH.Invasion.ranking(s).findIndex(r => r.key === 'player') + 1 || 99)) + '</p>' : '') : '') +
         '<h4 class="group">Coming up</h4><div class="b-list">' + upcoming.map(x => '<div class="b-row"><div class="b-info"><b>' + x.name + '</b><span class="muted">' + x.desc + '</span></div></div>').join('') + '</div>' +
         '<h4 class="group">News of the realm</h4><ul class="news">' + w.news.slice(0, 20).map(n => '<li><span class="muted">' + U.time((now - n.t) / 1000) + ' ago</span> ' + esc(n.text) + '</li>').join('') + '</ul>',
       on: { dragon: () => { UI.closeSheets(); CH.WorldUI.open(w.dragon); } },
@@ -328,11 +330,11 @@ CH.Screens = (function () {
       if (live && war.holder !== 'guard' && !war.hold[war.holder]) hold.push([war.holder, now - war.holdStart]);
       hold.sort((a, b) => b[1] - a[1]);
       const kills = war ? Object.entries(war.kills).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
-      html = '<div class="panel ev-now"><span class="kicker">' + CH.THRONE.title + '</span><h3>' + (th.king ? '👑 ' + esc(th.king.name) : 'No king') + '</h3>' + (th.king ? '<p class="muted">Reigns until ' + new Date(th.king.until).toLocaleString() + ' · held the throne ' + U.time(th.king.held / 1000) + '</p>' : '') +
+      html = '<div class="panel ev-now"><span class="kicker">' + CH.THRONE.title + '</span><h3>' + (th.king ? '👑 ' + esc(CH.Throne.kingName(s)) : 'No king') + '</h3>' + (th.king ? '<p class="muted">Reigns until ' + new Date(th.king.until).toLocaleString() + ' · held the throne ' + U.time(th.king.held / 1000) + '</p>' : '') +
         '<p>' + (live ? '<b class="warn">Throne War live · ' + U.time((war.end - now) / 1000) + ' left</b>' : 'Next Throne War: ' + new Date(CH.Throne.warWindow(now).next).toLocaleString()) + '</p></div>' +
         (war ? '<h4 class="group">' + (live ? 'Hold time (live)' : 'Last war: hold time') + '</h4>' + (hold.map(([k, ms], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.time(ms / 1000) + '</span></div>').join('') || '<p class="muted">Nobody has taken the Citadel yet.</p>') +
           '<h4 class="group">Top killers of the war</h4>' + kills.map(([k, n], i) => '<div class="rank-row' + (k === 'player' ? ' me' : '') + '"><span class="rk">' + medal(i) + '</span><b>' + esc(CH.Throne.keyName(s, k)) + '</b><span></span><span class="rv">' + U.fmt(n) + ' ☠</span></div>').join('') : '') +
-        (th.history.length ? '<h4 class="group">Past kings</h4><ul class="news">' + th.history.map(h => '<li>' + new Date(h.t).toLocaleDateString() + ' · ' + esc(h.name) + ' (' + U.time(h.held / 1000) + ')</li>').join('') + '</ul>' : '');
+        (th.history.length ? '<h4 class="group">Past kings</h4><ul class="news">' + th.history.map(h => '<li>' + new Date(h.t).toLocaleDateString() + ' · ' + esc(h.key ? CH.Throne.keyName(s, h.key) : h.name) + ' (' + U.time(h.held / 1000) + ')</li>').join('') + '</ul>' : '');
     }
     return {
       title: 'Leaderboards',
@@ -376,7 +378,7 @@ CH.Screens = (function () {
     const itemCards = Object.keys(G.items).map(id => '<div class="b-row">' + icon(CH.ITEMS[id].icon, 'big-ico') + '<div class="b-info"><b>' + CH.ITEMS[id].name + '</b><span class="muted">' + CH.ITEMS[id].desc + ' · You have ' + (s.items[id] || 0) + '</span></div><button class="btn btn-gem" data-act="item" data-id="' + id + '"' + (s.res.gems >= G.items[id] ? '' : ' disabled') + '>' + icon('gems') + G.items[id] + '</button></div>').join('');
     return {
       title: 'Gem Shop',
-      html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
+      html: '<div class="panel army-sum"><span>' + icon('gems') + '<b>' + U.fmt(s.res.gems) + '</b> gems</span><button class="btn btn-gold" data-act="redeem">🎁 Redeem a code</button><span class="muted">Earn gems from player levels, monster camps, ruins, events, 3-star campaign stages and redeem codes.</span></div>' +
         '<h4 class="group">Resources</h4><p class="muted">Bought resources are added straight to your kingdom and can go above your storage limit.</p><div class="k-grid">' + resCards + '</div>' +
         '<h4 class="group">Marches</h4><div class="b-row">' + icon('swords', 'big-ico') + '<div class="b-info"><b>Extra march slot</b><span class="muted">You have ' + S.marchSlots(s) + ' of ' + CH.MAX_MARCHES + ' marches (' + S.baseMarchSlots(s) + ' from your castle + ' + (s.extraMarch || 0) + ' bought). Permanent.</span></div>' +
           (S.marchSlots(s) >= CH.MAX_MARCHES ? '<span class="maxed">Max</span>' : '<button class="btn btn-gem" data-act="march"' + (s.res.gems >= CH.GEM_SHOP.marchSlot(s.extraMarch || 0) ? '' : ' disabled') + '>' + icon('gems') + CH.GEM_SHOP.marchSlot(s.extraMarch || 0) + '</button>') + '</div>' +
@@ -384,6 +386,7 @@ CH.Screens = (function () {
         '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
       on: {
         res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
+        redeem: () => UI.sheet('redeem'),
         march: () => { const r = S.buyMarchSlot(s); if (!r.ok) return fail(r); CH.Audio.play('horn'); persist(); UI.toast('New march slot! You now have ' + S.marchSlots(s) + ' marches.', 'good'); UI.refreshSheet(); },
         skins: () => UI.sheet('skins'),
       },
@@ -409,6 +412,7 @@ CH.Screens = (function () {
         '<div class="tc-stats">' + (h.unlocked ? 'Level ' + h.level + ' / ' + S.heroMaxLevel(s) + ' · ' : '') + '❤ ' + U.fmt(d.hp * m) + ' · ⚔ ' + U.fmt(d.dmg * m) + (d.proj ? ' ranged' : '') + '</div>' +
         '<div class="muted">Commands ' + CH.CLASS_NAMES[d.cls] + ': +' + Math.round(d.bonus * (1 + 0.1 * (h.level - 1)) * 100) + '% their attack and health.</div>' +
         (h.unlocked ? '<div class="bar"><i style="width:' + Math.min(100, Math.round((h.xp || 0) / CH.heroXpFor(h.level) * 100)) + '%"></i></div><span class="muted">' + (h.xp || 0) + ' / ' + CH.heroXpFor(h.level) + ' battle XP</span>' +
+          '<button class="btn btn-quiet" data-act="forge" data-id="' + id + '">⚒ Gear & Talents (might +' + CH.Meta.might(s, id) + '%)</button>' +
           (s.defenseHero === id ? '<span class="good">🛡 Defends your kingdom</span>' : '<button class="btn btn-quiet" data-act="defender" data-id="' + id + '">Set as castle defender</button>') : '') +
         (hl < d.unlock ? '<span class="req">' + icon('lock') + 'Hero Hall level ' + d.unlock + '</span>' :
           '<button class="btn btn-gold btn-block" data-act="hero" data-id="' + id + '"' + (why ? ' disabled' : '') + '>' + (h.unlocked ? 'Train to level ' + (h.level + 1) : 'Recruit') + ' ' + UI.cost(next, s) + '</button>' + (why && why !== 'Not enough resources' ? '<span class="req">' + why + '</span>' : '')) +
@@ -420,6 +424,7 @@ CH.Screens = (function () {
       on: {
         hero: b => { const r = S.heroAction(s, b.dataset.id); if (!r.ok) return fail(r); CH.Audio.play(r.unlocked ? 'heroDeploy' : 'upgrade'); persist(); UI.refreshSheet(); },
         defender: b => { s.defenseHero = b.dataset.id; persist(); UI.refreshSheet(); },
+        forge: b => UI.sheet('forge', b.dataset.id),
       },
     };
   }
@@ -511,7 +516,7 @@ CH.Screens = (function () {
           .map(([k, v]) => '<div class="panel"><span class="label">' + k + '</span><b>' + v + '</b></div>').join('') + '</div>' +
 
         '<h4 class="group">What\'s next</h4><div class="road">' + (road.join('') || '<p>Your castle is at its maximum level.</p>') + '</div>',
-      onInput: e => { if (e.target.id === 'pname') { s.player.name = e.target.value.trim().slice(0, 24) || 'Lord of Crownhold'; persist(); CH.Home.refreshHud(true); } },
+      onInput: e => { if (e.target.id === 'pname') { s.player.name = e.target.value.trim().slice(0, 24) || 'Lord of Eldoria'; persist(); CH.Home.refreshHud(true); } },
     };
   }
 
@@ -547,13 +552,13 @@ CH.Screens = (function () {
     const tog = (k, l) => '<label class="set-row"><span>' + l + '</span><input type="checkbox" data-set="' + k + '"' + (st[k] ? ' checked' : '') + '></label>';
     return {
       title: 'Settings',
-      html: '<div class="settings"><section class="panel"><h4>Sound</h4>' + slider('music', 'Music volume') + slider('sfx', 'Effects volume') + tog('muted', 'Mute everything') + '</section>' +
+      html: '<div class="panel army-sum"><span>Have a gift code?</span><button class="btn btn-gold" data-act="redeem">🎁 Redeem code</button></div><div class="settings"><section class="panel"><h4>Sound</h4>' + slider('music', 'Music volume') + slider('sfx', 'Effects volume') + tog('muted', 'Mute everything') + '</section>' +
         '<section class="panel"><h4>Battle</h4>' + tog('damageNumbers', 'Show big damage numbers') + '</section>' +
         '<section class="panel"><h4>Gift codes</h4><button class="btn" data-act="redeem">Redeem a code</button></section>' +
         '<section class="panel"><h4>Progress</h4><p class="muted">Saved automatically in this browser' + (S.persistent() ? '' : ' (storage is blocked here, so progress lasts only this session)') + '.</p>' +
         (settings.confirm ? '<p class="warn">This erases your kingdom, army, heroes and records. It can\'t be undone.</p><div class="row"><button class="btn btn-danger" data-act="reset2">Erase everything</button><button class="btn" data-act="keep">Keep my kingdom</button></div>' : '<button class="btn btn-danger-quiet" data-act="reset">Reset progress…</button>') + '</section>' +
         '<p class="muted">Crownhold v' + CH.CONFIG.VERSION + '. All art, sound and music are generated in code. Raid opponents are AI-generated; there is no online multiplayer.</p></div>',
-      on: {
+      on: { redeem: () => UI.sheet('redeem'),
         redeem: () => UI.sheet('redeem'),
         reset: () => { settings.confirm = true; UI.refreshSheet(); },
         keep: () => { settings.confirm = false; UI.refreshSheet(); },
@@ -573,7 +578,7 @@ CH.Screens = (function () {
       html: '<div class="howto">' +
         '<section class="panel"><h4>The core loop</h4><ol><li><b>Build</b> your kingdom: mines, mills, quarries and farms produce resources; storage protects them.</li><li><b>Train</b> troops in the Barracks, Archery Range, Stable and Siege Workshop. Every troop eats food each hour.</li><li><b>Explore</b> the World map: 60 AI kingdoms live, grow and fight each other in real time, and keep going while you are offline.</li><li><b>Scout</b> a kingdom, then <b>attack</b> with an army, a hero and a formation. Loot comes home with your troops.</li><li><b>Survive</b>: aggressive kingdoms will raid you. Watch for the red warning, then defend with your troops, towers, walls and traps, raise a shield, or teleport away.</li></ol></section>' +
         '<section class="panel"><h4>Combat</h4><ul class="bullets"><li>Infantry beat cavalry, cavalry beat ranged, ranged beat infantry (+50% damage).</li><li>Siege engines wreck walls and towers but are weak against troops. Flyers ignore walls.</li><li>Battles are real simulations. Open a report and tap <b>Watch battle</b> to see exactly what happened.</li><li>Wounded troops go to the Infirmary if there are beds; heal them for a fraction of their cost.</li></ul></section>' +
-        '<section class="panel"><h4>Fair play rules</h4><ul class="bullets"><li>Beginner protection: your first 45 minutes, while your castle is below level 3.</li><li>After any attack on you, a ' + CH.CONFIG.POST_ATTACK_SHIELD_MIN + '-minute shield. AIs space attacks at least ' + CH.CONFIG.INCOMING_GAP_MIN + ' minutes apart and match their army to your strength.</li><li>Part of every resource is protected by your castle and storage buildings.</li><li>You can\'t raid the same kingdom again for ' + CH.CONFIG.TARGET_COOLDOWN_MIN + ' minutes, and shielded kingdoms can\'t be attacked.</li><li>Attacking or scouting a kingdom drops your own shield.</li></ul></section>' +
+        '<section class="panel"><h4>Fair play rules</h4><ul class="bullets"><li>Beginner protection: your first 45 minutes, while your castle is below level 3.</li><li>After any attack on you, a ' + CH.CONFIG.POST_ATTACK_SHIELD_MIN + '-minute shield. AIs space attacks at least ' + CH.CONFIG.INCOMING_GAP_MIN + ' minutes apart and match their army to your strength.</li><li>Part of every resource is protected by your castle and storage buildings.</li><li>Only a shield stops an attack: you may attack any kingdom again right away, and so may they.</li><li>Attacking or scouting a kingdom drops your own shield.</li></ul></section>' +
         '<section class="panel"><h4>Controls</h4><ul class="bullets"><li>Drag to pan, scroll or pinch to zoom, on both the kingdom and the world map.</li><li>Tap anything on the world map to inspect it; use Filter to show weaker or stronger kingdoms.</li><li>Your castle panel on the map offers random and advanced teleports.</li></ul></section></div>',
     };
   }

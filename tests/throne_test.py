@@ -36,6 +36,10 @@ with sync_playwright() as p:
     pg.screenshot(path=SH+'/citadel_war.png')
     fx = pg.evaluate("(()=>{const n=Date.now();const w=CH.App.save.world;return {burn:w.kingdoms.filter(k=>k.burn>n).length+(w.throne.burn>n?1:0),smoke:w.kingdoms.filter(k=>k.smoke>n).length+(w.throne.smoke>n?1:0)}})()")
     check('defeated castles burn, survivors smoke', fx['burn'] + fx['smoke'] > 0, fx)
+    pg.evaluate("(()=>{const w=CH.App.save.world.throne.war;w.holder='player';w.garrison={knight:500};w.shares={player:1};w.holdStart=Date.now();CH.WorldUI.select({type:'throne',o:CH.App.save.world.throne})})()"); pg.wait_for_timeout(300)
+    check('Citadel panel offers Withdraw for your garrison', pg.is_visible('[data-p=withdraw]'))
+    pg.click('[data-p=withdraw]'); pg.wait_for_timeout(200); pg.click('[data-wd]'); pg.wait_for_timeout(300)
+    check('withdrawing empties the Citadel and sends troops home', pg.evaluate("CH.App.save.world.throne.war.holder==='none' && CH.App.save.world.marches.some(m=>m.owner==='player'&&m.kind==='return')"))
     # show a burning kingdom
     pg.evaluate("(()=>{const n=Date.now();const w=CH.App.save.world;const k=w.kingdoms.find(k=>k.burn>n)||w.kingdoms[0];k.burn=n+600000;const k2=w.kingdoms.find(x=>x!==k&&Math.hypot(x.x-k.x,x.y-k.y)<12)||w.kingdoms[1];k2.smoke=n+600000;k2.burn=0;CH.App.wview.center((k.x+k2.x)/2,(k.y+k2.y)/2);CH.App.wview.cam.zoom=1.1;CH.WorldUI.select({type:'kingdom',o:k})})()")
     pg.wait_for_timeout(500); pg.screenshot(path=SH+'/burn_smoke.png')

@@ -26,7 +26,6 @@ CH.CONFIG = {
   POST_ATTACK_SHIELD_MIN: 60,  // after you win a defense (90 after a partial loss, 120 after a total loss)
   INCOMING_GAP_MIN: 60,    // minimum gap between two AI attacks on you
   AI_PLAYER_COOLDOWN_H: 3, // one AI won't attack you again for 3h (2h if it holds a grudge)
-  TARGET_COOLDOWN_MIN: 30, // you can't raid the same kingdom again for 30 minutes
   MAX_OFFLINE_ATTACKS: 2,
   RAID_TIME: 180,
   WALL_PATH_COST: 7,      // extra A* cost for walking through a wall tile (attackers break it)
@@ -322,6 +321,13 @@ CH.ITEMS = {
   foodPack: { name: 'Food Wagon', kind: 'res', res: { food: 8000 }, icon: 'food', desc: '+8,000 food.' },
 };
 CH.ITEM_ORDER = Object.keys(CH.ITEMS);
+/* Alien invaders (event units) */
+Object.assign(CH.ENEMIES, {
+  alienDrone: { name: 'Alien Drone', hp: 90, dmg: 12, rate: 1.4, range: 2.4, speed: 2.6, target: 'any', flying: true, proj: 'laser', size: 9, sprite: 'alienDrone', threat: 2, gold: 5, desc: 'Hovering saucer that fires lasers over walls.' },
+  alienTrooper: { name: 'Alien Trooper', hp: 170, dmg: 24, rate: 0.9, range: 3.2, speed: 1.6, target: 'any', proj: 'laser', size: 10, sprite: 'alienTrooper', threat: 3, gold: 6, desc: 'Grey-skinned soldier with a ray gun.' },
+  alienBrute: { name: 'Alien Brute', hp: 950, dmg: 45, rate: 0.8, range: 0.8, speed: 1.2, armor: 0.3, target: 'defense', large: true, size: 15, sprite: 'alienBrute', threat: 8, gold: 20, desc: 'Armoured shock trooper that tears down towers.' },
+  alienOverlord: { name: 'Alien Overlord', hp: 9000, dmg: 110, rate: 0.7, range: 3.5, speed: 0.9, target: 'any', proj: 'laser', splash: 1.2, large: true, size: 22, sprite: 'alienOverlord', threat: 60, gold: 200, desc: 'A floating brain in a crystal dome, commanding the swarm.' },
+});
 
 /* Gem shop. Resources bought here are added directly and may exceed storage (like a gift). */
 CH.GEM_SHOP = {
@@ -347,7 +353,12 @@ CH.MAX_MARCHES = 5;
 /* The Throne of Eldoria */
 CH.THRONE = {
   name: 'Aurelion Citadel', title: 'King of Eldoria',
-  warDay: 6, warHour: 16, warMinutes: 30, // Saturday 15:00 local time, 30 minutes
+  /* ===== THRONE WAR SCHEDULE (edit here) =====
+   * warDay:    0 = Sunday, 1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday
+   * warHour:   0–23 (24-hour clock, the player's device time)
+   * warMinute: 0–59
+   * warMinutes: how long the war lasts. The king reigns until the next war (one week). */
+  warDay: 6, warHour: 15, warMinute: 0, warMinutes: 30,
   rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
   kingBonus: { prod: 0.1, atk: 0.05 },
   prizes: [

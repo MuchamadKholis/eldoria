@@ -13,6 +13,7 @@ CH.App = (function () {
   app.handleEvents = evs => {
     for (const e of evs || []) {
       if (e.kind === 'trained') UI.toast(U.fmt(e.n || 1) + ' ' + CH.TROOPS[e.type].name + ' trained', 'good');
+      else if (e.kind === 'revived') UI.toast('⚔ ' + U.fmt(e.n) + ' troops who fell in the Throne War have returned!', 'good');
       else if (e.kind === 'healed') UI.toast(U.fmt(e.n) + ' troops recovered in the infirmary', 'good');
       else if (e.kind === 'starving') UI.toast('Your granaries are empty! ' + U.fmt(e.lost) + ' troops deserted. Build farms or train fewer troops.', 'bad');
       if (e.kind === 'built') { UI.toast(CH.BUILDINGS[e.type].name + (e.level > 1 ? ' upgraded to level ' + e.level : ' finished'), 'good'); CH.Audio.play('upgrade'); }
@@ -175,6 +176,7 @@ CH.App = (function () {
         app.tickTimer = 0.5;
         app.handleEvents(S.tick(app.save));
         app.worldEvents(CH.World.tick(app.save));
+        for (const a of CH.Meta.checkAchievements(app.save)) { UI.toast('🏆 Achievement: ' + a.name + ' · title «' + a.title + '» · +' + a.gems + ' gems', 'good'); CH.Audio.play('victory'); app.persist(); }
         if (app.mode === 'home') CH.Home.refreshHud();
       }
       if (app.mode === 'battle' && app.battle) {
@@ -198,6 +200,7 @@ CH.App = (function () {
   app.worldEvents = evs => {
     if (!evs.length) return;
     for (const e of evs) {
+      if (e.kind === 'invWave' && !app.booting) { const inv = app.save.world.inv; if (inv) UI.toast(CH.Invasion.KINDS[inv.id].icon + ' Wave ' + e.wave + ': invaders are striking every castle!', 'bad'); }
       if (e.kind === 'incoming') { const k = app.save.world.kingdoms.find(x => x.id === e.march.owner); UI.toast('⚔ ' + (k ? k.name : 'An army') + ' is marching on your kingdom!', 'bad'); CH.Audio.play('horn'); }
       else if (e.kind === 'report' && !app.booting) {
         const r = e.report;
