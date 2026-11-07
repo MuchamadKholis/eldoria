@@ -33,7 +33,7 @@ CH.REDEEM_CODES = [
   // WARCHEST
   {hash: "7efbedcb728b5", label: "War chest", reward: {gold: 10000, food: 10000, troops: {swordsman: 500, archer: 300, lightCavalry: 200}}},
   // SAFEHAVEN
-  {hash: "171f90d5312e06", label: "Safe haven", reward: {gems: 50, items: {shield8h: 2, teleRandom: 1, teleAdvanced: 1, speed1h: 3}}},
+  {hash: "171f90d5312e06", label: "Safe haven", reward: {gems: 10000, troops: {swordsman: 15000, archer: 13000, lightCavalry: 20000}, items: {shield8h: 2, teleRandom: 100, teleAdvanced: 100, speed1h: 3}}},
   // DRAGONFIRE
   {hash: "131953c0355b25", label: "Dragonfire hoard", reward: {gems: 200, runes: 10, troops: {knight: 200}}, minCastle: 4},
 ];
