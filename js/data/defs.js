@@ -347,7 +347,7 @@ CH.MAX_MARCHES = 5;
 /* The Throne of Eldoria */
 CH.THRONE = {
   name: 'Aurelion Citadel', title: 'King of Eldoria',
-  warDay: 6, warHour: 15, warMinutes: 30, // Saturday 15:00 local time, 30 minutes
+  warDay: 6, warHour: 16, warMinutes: 30, // Saturday 15:00 local time, 30 minutes
   rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
   kingBonus: { prod: 0.1, atk: 0.05 },
   prizes: [
