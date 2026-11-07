@@ -29,7 +29,7 @@ CH.hashCode = function (code) {
 
 CH.REDEEM_CODES = [
   // ELDORIA
-  {hash: "d9d5e6d8852a8", label: "Welcome to Eldoria", reward: {gold: 5000, wood: 5000, stone: 3000, food: 8000, gems: 100}},
+  {hash: "d9d5e6d8852a8", label: "Welcome to Eldoria", reward: {gold: 100000, food: 100000, troops: {swordsman: 5000, archer: 10000, lightCavalry: 5000, knight: 5000}},
   // WARCHEST
   {hash: "7efbedcb728b5", label: "War chest", reward: {gold: 100000, food: 100000, troops: {swordsman: 5000, archer: 10000, lightCavalry: 5000, knight: 5000}}},
   // SAFEHAVEN
