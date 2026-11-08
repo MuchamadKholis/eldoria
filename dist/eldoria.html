@@ -556,6 +556,16 @@ body.in-battle .warbar { display: none !important; }
 .b-row.locked { opacity: 0.6; }
 @media (max-width: 760px) { .season-head, .season-row { grid-template-columns: 30px 1fr 1fr; } .login-grid { grid-template-columns: repeat(2, 1fr); } }
 
+.inline-speed { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.inline-speed .btn { min-height: 34px; padding: 3px 8px; font-size: 0.8rem; }
+.r-row.active { border: 1px solid var(--gold); background: rgba(255, 200, 80, 0.1); }
+.gear-pair { display: inline-flex; gap: 2px; align-items: center; }
+.gear-pair .btn { min-height: 30px; padding: 2px 8px; font-size: 0.75rem; }
+
+.when { display: flex; flex-direction: column; min-width: 92px; font-weight: 900; color: var(--gold-hi); font-size: 0.85rem; }
+.when i { font-style: normal; font-weight: 700; color: var(--muted); font-size: 0.75rem; }
+.realm-alien { border-color: #5fffa0; } .realm-hell { border-color: #ff6a3a; } .realm-heaven { border-color: #ffe9a0; }
+
 </style>
 </head>
 <body>
@@ -601,6 +611,7 @@ CH.CONFIG = {
   AREA: [[14, 12], [16, 13], [18, 14], [20, 15], [22, 16], [24, 17], [26, 18], [26, 18]],
   START_RES: { gold: 1500, wood: 1500, stone: 1000, food: 3000, gems: 200, runes: 0 },
   // ---- World (Eldoria) ----
+  HOME_AREA: { x: 1, y: 1, w: 28, h: 20 }, // your buildable kingdom (fixed; the whole map minus a border)
   WORLD_SIZE: 96,          // world map is WORLD_SIZE × WORLD_SIZE tiles
   AI_COUNT: 60,            // AI kingdoms generated (architecture supports many more)
   SEC_PER_TILE: 6,         // base march time per tile (seconds), divided by troop march speed
@@ -900,12 +911,20 @@ CH.ITEMS = {
   shield8h: { name: 'Peace Shield 8h', kind: 'shield', ms: 8 * 3600e3, icon: 'shield', desc: 'No kingdom can attack or scout you for 8 hours. Marching on others drops it.' },
   teleRandom: { name: 'Random Teleport', kind: 'teleport', random: true, icon: 'map', desc: 'Moves your castle to a random safe spot.' },
   teleAdvanced: { name: 'Advanced Teleport', kind: 'teleport', icon: 'map', desc: 'Moves your castle to a tile you choose on the world map.' },
+  marchBoost: { name: 'March Boost', kind: 'march', icon: 'time', desc: 'Halves the remaining time of one march.' },
   goldPack: { name: 'Gold Chest', kind: 'res', res: { gold: 5000 }, icon: 'gold', desc: '+5,000 gold.' },
   woodPack: { name: 'Timber Bundle', kind: 'res', res: { wood: 5000 }, icon: 'wood', desc: '+5,000 wood.' },
   stonePack: { name: 'Stone Crate', kind: 'res', res: { stone: 5000 }, icon: 'stone', desc: '+5,000 stone.' },
   foodPack: { name: 'Food Wagon', kind: 'res', res: { food: 8000 }, icon: 'food', desc: '+8,000 food.' },
 };
 CH.ITEM_ORDER = Object.keys(CH.ITEMS);
+/* Celestial host of Elysium (realm units) */
+Object.assign(CH.ENEMIES, {
+  seraph: { name: 'Seraph', hp: 140, dmg: 22, rate: 1.0, range: 3.0, speed: 2.0, target: 'any', flying: true, proj: 'holy', magic: true, size: 10, sprite: 'seraph', threat: 3, gold: 6, desc: 'Six-winged angel hurling holy light.' },
+  celestialKnight: { name: 'Celestial Knight', hp: 700, dmg: 40, rate: 0.9, range: 0.8, speed: 1.3, armor: 0.35, target: 'any', size: 13, sprite: 'celestialKnight', threat: 7, gold: 15, desc: 'Golden-armoured paladin of the heavens.' },
+  valkyrie: { name: 'Valkyrie', hp: 420, dmg: 36, rate: 1.2, range: 1.2, speed: 2.4, target: 'any', flying: true, size: 12, sprite: 'valkyrie', threat: 6, gold: 12, desc: 'Winged spear-maiden diving from the clouds.' },
+  archangel: { name: 'Archangel', hp: 9000, dmg: 120, rate: 0.7, range: 3.2, speed: 1.0, target: 'any', flying: true, proj: 'holy', splash: 1.4, large: true, size: 22, sprite: 'archangel', threat: 80, gold: 250, desc: 'Guardian of Elysium\'s citadel.' },
+});
 /* Alien invaders (event units) */
 Object.assign(CH.ENEMIES, {
   alienDrone: { name: 'Alien Drone', hp: 90, dmg: 12, rate: 1.4, range: 2.4, speed: 2.6, target: 'any', flying: true, proj: 'laser', size: 9, sprite: 'alienDrone', threat: 2, gold: 5, desc: 'Hovering saucer that fires lasers over walls.' },
@@ -920,7 +939,8 @@ CH.GEM_SHOP = {
     { amount: 5000, gems: 20 }, { amount: 25000, gems: 90 }, { amount: 100000, gems: 320 },
   ],
   foodBonus: 1.5, // food packs contain 50% more
-  items: { speed5m: 10, speed1h: 60, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  items: { speed5m: 10, speed1h: 60, marchBoost: 20, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  mats: { iron: { n: 50, gems: 15 }, leather: { n: 50, gems: 15 }, crystal: { n: 10, gems: 40 }, dragonscale: { n: 2, gems: 80 } },
   fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
 };
 
@@ -945,7 +965,21 @@ CH.THRONE = {
    * warMinutes: how long the war lasts. The king reigns until the next war (one week). */
   warDay: 6, warHour: 15, warMinute: 0, warMinutes: 30,
   rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
-  kingBonus: { prod: 0.1, atk: 0.05 },
+  // The king enjoys every royal buff.
+  kingBuffs: { atk: 0.10, march: 0.10, def: 0.10, train: 0.15, prod: 0.15, research: 0.15 },
+  // Titles the king can grant. "def" means troop defense + health.
+  titles: {
+    marshal: { name: 'Grand Marshal', good: true, buffs: { atk: 0.10, march: 0.15 } },
+    guardian: { name: 'Royal Guardian', good: true, buffs: { def: 0.10 } },
+    armsmaster: { name: 'Master of Arms', good: true, buffs: { train: 0.20 } },
+    steward: { name: 'Royal Steward', good: true, buffs: { prod: 0.20 } },
+    scholar: { name: 'Royal Scholar', good: true, buffs: { research: 0.20 } },
+    traitor: { name: 'Traitor', good: false, buffs: { atk: -0.10, march: -0.15 } },
+    coward: { name: 'Coward', good: false, buffs: { def: -0.10 } },
+    slacker: { name: 'Slacker', good: false, buffs: { train: -0.20 } },
+    beggar: { name: 'Beggar', good: false, buffs: { prod: -0.20 } },
+    fool: { name: 'Fool', good: false, buffs: { research: -0.20 } },
+  },
   prizes: [
     { tier: 'royal', name: 'Royal Treasure', count: 1, reward: { gems: 1000, gold: 100000, food: 100000 }, items: { shield8h: 2, teleAdvanced: 1, speed1h: 5 } },
     { tier: 'noble', name: 'Noble Chest', count: 3, reward: { gems: 300, gold: 50000, food: 50000 }, items: { speed1h: 2 } },
@@ -1391,7 +1425,8 @@ CH.State = (function () {
   const castle = s => s.buildings.find(b => b.type === 'castle');
   const castleLevel = s => Math.max(1, (castle(s) || { level: 1 }).level);
   function area(s, cl) {
-    const [w, h] = C.AREA[(cl || castleLevel(s)) - 1];
+    if (!cl) return { ...C.HOME_AREA }; // your kingdom: one big fixed area from the start
+    const [w, h] = C.AREA[cl - 1];
     return { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h };
   }
   const byId = (s, id) => s.buildings.find(b => b.id === id);
@@ -1412,7 +1447,7 @@ CH.State = (function () {
     let m = 1 + 0.05 * ((s.research.techs || {}).prosperity || 0);
     if (s.faction != null && CH.FACTIONS && CH.FACTIONS[s.faction].bonus.prod) m += CH.FACTIONS[s.faction].bonus.prod;
     if (CH.World && s.world) m += CH.World.territoryBonus(s);
-    if (CH.Throne && s.world && CH.Throne.isPlayerKing(s)) m += CH.THRONE.kingBonus.prod;
+    if (CH.Throne && s.world) m += CH.Throne.buffs(s).prod;
     return m;
   }
   function productionPerMin(s, r) {
@@ -1579,12 +1614,14 @@ CH.State = (function () {
     const b = byId(s, id);
     if (!b || B[b.type].cat !== 'econ') return 0;
     const r = B[b.type].res;
-    const room = capacity(s, r) - s.res[r];
-    const amt = Math.floor(Math.min(b.buf, room));
+    const room = Math.max(0, capacity(s, r) - s.res[r]); // above the limit (gifts, loot): nothing to collect, nothing lost
+    const amt = Math.floor(Math.max(0, Math.min(b.buf, room)));
     s.res[r] += amt; b.buf -= amt;
     if (CH.Meta && amt > 0) CH.Meta.track(s, 'collect', amt);
     return amt;
   }
+  /** Can this producer be collected right now? (No, if its resource is already at or above the limit.) */
+  const canCollectB = (s, b) => B[b.type].cat === 'econ' && b.level > 0 && b.buf >= 1 && s.res[B[b.type].res] < capacity(s, B[b.type].res);
   function collectAll(s) {
     const got = { gold: 0, wood: 0, stone: 0, food: 0 };
     for (const b of s.buildings) if (B[b.type].cat === 'econ') got[B[b.type].res] += collect(s, b.id);
@@ -1595,7 +1632,7 @@ CH.State = (function () {
   const barracksLevel = s => highestLevel(s, 'barracks');
   /** Each military building trains one batch at a time. */
   const batchCap = (s, bld) => (highestLevel(s, bld) ? B[bld].batch(highestLevel(s, bld)) : 0);
-  const trainTimeEach = (s, type) => CH.TROOPS[type].time * (1 - 0.04 * (highestLevel(s, CH.TROOPS[type].building) - 1));
+  const trainTimeEach = (s, type) => CH.TROOPS[type].time * (1 - 0.04 * (highestLevel(s, CH.TROOPS[type].building) - 1)) / Math.max(0.5, 1 + (CH.Throne && s.world ? CH.Throne.buffs(s).train : 0));
   function trainCost(type, n) { const c = CH.TROOPS[type].cost; return { gold: c.gold * n, wood: c.wood * n, stone: c.stone * n, food: c.food * n }; }
   function trainBlocker(s, type, n = 1) {
     const d = CH.TROOPS[type], lvl = highestLevel(s, d.building);
@@ -1771,7 +1808,7 @@ CH.State = (function () {
     if (why) return { ok: false, reason: why };
     const L = resLevel(s, kind, id) + 1;
     pay(s, researchCost(kind, id, L));
-    const tm = kind === 'tech' ? CH.RESEARCH.techTime(L) : CH.RESEARCH.time(L);
+    const tm = Math.round((kind === 'tech' ? CH.RESEARCH.techTime(L) : CH.RESEARCH.time(L)) / Math.max(0.5, 1 + (CH.Throne && s.world ? CH.Throne.buffs(s).research : 0)));
     s.rjob = { kind, id, to: L, ends: now + tm * 1000, total: tm };
     return { ok: true };
   }
@@ -2042,7 +2079,7 @@ CH.State = (function () {
     castle, castleLevel, area, byId, countOf, maxCount, maxLevelFor, highestLevel, buildingLevel, capacity, productionPerMin,
     builders, busy, freeBuilders, canAfford, pay, give, missing, xpFor, addXp,
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
-    collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
+    collect, collectAll, canCollectB, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
     prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy, baseMarchSlots, buyMarchSlot, ownsSkin, buySkin, equipSkin, heroSkin,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,
@@ -2632,6 +2669,18 @@ CH.Audio = (function () {
     }
 
     updateAttacker(u, dt) {
+      // 0) Wipe-out battles (camps, Citadel, arena, realms): hunt enemy troops wherever they are.
+      const hunt = this.mode === 'siege' && this.cfgSiege.objective === 'eliminate';
+      if (hunt || u.huntOnly) {
+        if (u.tu && u.tu.dead) u.tu = null;
+        if (!u.tu) u.tu = this.nearestUnit(u, 'def', 1e9);
+        if (u.tu) {
+          if (Math.hypot(u.tu.x - u.x, u.tu.y - u.y) <= u.range + u.tu.size + 4) this.attack(u, u.tu, false);
+          else if (u.flying || !this.blockedLine(u, u.tu)) this.moveToward(u, u.tu.x, u.tu.y, dt);
+          else { u.huntOnly = false; u.tu = null; } // a wall is in the way: deal with buildings first
+          if (u.tu) return;
+        }
+      }
       // 1) Fight defenders who get close (except siege units that only want buildings).
       if (u.def.target !== 'defense' && u.def.target !== 'walls') {
         if (u.tu && (u.tu.dead || Math.hypot(u.tu.x - u.x, u.tu.y - u.y) > u.range + 3 * T)) u.tu = null;
@@ -2652,7 +2701,11 @@ CH.Audio = (function () {
         return;
       }
       // 3) Buildings.
-      if (!u.tb || u.tb.dead) { u.tb = this.chooseBuilding(u); u.path = null; u.pi = 0; if (!u.tb) return; }
+      if (!u.tb || u.tb.dead) {
+        u.tb = this.chooseBuilding(u); u.path = null; u.pi = 0;
+        // Nothing left to knock down: never stand idle, go after the nearest enemy troop anywhere.
+        if (!u.tb) { u.tu = this.nearestUnit(u, 'def', 1e9); if (u.tu) { u.huntOnly = true; if (Math.hypot(u.tu.x - u.x, u.tu.y - u.y) <= u.range + u.tu.size + 4) this.attack(u, u.tu, false); else this.moveToward(u, u.tu.x, u.tu.y, dt); } return; }
+      }
       const tb = u.tb;
       if (this.distToB(u.x, u.y, tb) <= u.range + 0.35 * T) { this.attack(u, tb, true); return; }
       if (u.flying) { this.moveToward(u, tb.cx, tb.cy, dt); return; }
@@ -2667,6 +2720,12 @@ CH.Audio = (function () {
       } else this.moveToward(u, tb.cx, tb.cy, dt);
     }
 
+    /** True if a solid building sits on the straight line between two units. */
+    blockedLine(a, b) {
+      const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (T * 0.5));
+      for (let i = 1; i < n; i++) { const x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n; const ob = this.bAt(Math.floor(y / T) * W + Math.floor(x / T)); if (ob && !ob.dead && (ob.def.cat === 'wall' || ob.def.cat === 'gate')) return true; }
+      return false;
+    }
     updateDefender(u, dt) {
       const leash = u.leash || (u.hero ? 6 : 4.5) * T;
       if (u.tu && (u.tu.dead || Math.hypot(u.tu.x - u.ax, u.tu.y - u.ay) > leash + 2 * T)) u.tu = null;
@@ -3233,8 +3292,8 @@ CH.Audio = (function () {
     }
     /** Spawn points per formation; dir is the march direction (attacker → defender). */
     formationPlan(cfg) {
-      const [w, h] = C.AREA[Math.min(8, cfg.cl) - 1];
-      const x0 = Math.floor((W - w) / 2), y0 = Math.floor((H - h) / 2);
+      const ar = cfg.area || (() => { const [w0, h0] = C.AREA[Math.min(8, cfg.cl) - 1]; return { x: Math.floor((W - w0) / 2), y: Math.floor((H - h0) / 2), w: w0, h: h0 }; })();
+      const w = ar.w, h = ar.h, x0 = ar.x, y0 = ar.y;
       const mid = { x: W / 2, y: H / 2 };
       const edgeOf = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'W' : 'E') : (dy > 0 ? 'N' : 'S'));
       const main = edgeOf(cfg.dir.x, cfg.dir.y);
@@ -3421,12 +3480,12 @@ CH.Siege = (function () {
       .concat(attacker.monsters ? squads(attacker.monsters, 30).map(q => ({ ...q, monster: true, mult: attacker.monsterMult || 1 })) : []);
     let defSq = [];
     // Defenders fight on home turf: +15%.
-    if (defender.army) defSq = squads(defender.army).map(q => ({ ...q, mult: troopMult(q.type, defender) * 1.15 }));
+    if (defender.army) defSq = squads(defender.army).map(q => ({ ...q, mult: troopMult(q.type, defender) * 1.15 * (1 + (defender.defBonus || 0)) }));
     if (defender.monsters) defSq = defSq.concat(squads(defender.monsters, 24).map(q => ({ ...q, monster: true, mult: defender.monsterMult || 1 })));
     return {
       mode: 'siege', seed, playerSide,
       names: { atk: attacker.name, def: defender.name },
-      cl: defender.cl || 1, homeTerrain: !!defender.homeTerrain, kind: defender.kind,
+      cl: defender.cl || 1, homeTerrain: !!defender.homeTerrain, kind: defender.kind, area: defender.homeTerrain ? { ...CH.CONFIG.HOME_AREA } : null,
       layout: defender.layout || [],
       fortMult: fortScale(defender.cl || 1) * (1 + (defender.fortBonus || 0)),
       objective: defender.kind === 'camp' ? 'eliminate' : 'castle',
@@ -3525,7 +3584,8 @@ CH.Siege = (function () {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   /* ---------------- AI helpers ---------------- */
-  const aiProd = (k) => 45 * Math.pow(1.38, k.cl - 1) * CH.PERSONALITIES[k.p].eco;
+  const aiBuff = (k, b) => (CH.Throne && k.__s ? CH.Throne.buffs(k.__s, k.id)[b] : 0);
+  const aiProd = (k) => 45 * Math.pow(1.38, k.cl - 1) * CH.PERSONALITIES[k.p].eco * (1 + aiBuff(k, 'prod'));
   const aiCap = cl => 8000 * Math.pow(1.7, cl - 1);
   const aiMaxArmy = k => Math.round(150 * Math.pow(1.75, k.cl - 1) * CH.PERSONALITIES[k.p].army);
   const aiCastleCost = cl => 5000 * Math.pow(1.75, cl - 1);
@@ -3641,7 +3701,7 @@ CH.Siege = (function () {
       k.last = T;
     }
   }
-  const aiDefPower = k => armyPower(k.tr) * (1 + 0.08 * k.cl) * (1 + (CH.PERSONALITIES[k.p].fort || 0)) + 400 * Math.pow(1.6, k.cl);
+  const aiDefPower = k => armyPower(k.tr) * (1 + 0.08 * k.cl) * (1 + (CH.PERSONALITIES[k.p].fort || 0)) * (1 + aiBuff(k, 'def')) + 400 * Math.pow(1.6, k.cl);
   function playerDefPower(s) {
     let p = armyPower(s.army) * (1 + 0.08 * CH.State.castleLevel(s));
     for (const b of s.buildings) if (CH.BUILDINGS[b.type].atk) p += b.level * 120 * CH.Siege.fortScale(CH.State.castleLevel(s)) * 0.05;
@@ -3667,6 +3727,7 @@ CH.Siege = (function () {
     if (s.faction === 2) m += 0.1;
     if (heroId === 'thorne') m += 0.1;
     if (CH.Meta) m += CH.Meta.marchBonus(s, heroId);
+    if (CH.Throne && s.world) m += CH.Throne.buffs(s).march;
     return m;
   }
   function marchSeconds(from, to, army, mult = 1, kind) {
@@ -3939,7 +4000,7 @@ CH.Siege = (function () {
     const cfg = CH.Siege.build({
       attacker: { name: owner.name, army: m.army, hero: { id: m.hero, level: m.heroLevel }, research: {}, atkBonus: 0.03 * owner.cl },
       defender: { name: s.player.name, kind: 'player', cl, homeTerrain: true, layout: s.buildings.filter(b => b.level > 0).map(b => ({ type: b.type, level: b.level, tx: b.tx, ty: b.ty })),
-        army: garrison, heroes: homeHeroes, hero: defHero, research: s.research.troops, fortBonus },
+        army: garrison, heroes: homeHeroes, hero: defHero, research: s.research.troops, fortBonus, defBonus: CH.Throne.buffs(s).def },
       formation: U.pick(['surround', 'spearhead', 'pincer'], U.rng(T % 1e9)), dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
     cfg.castleSkin = s.equipped ? s.equipped.castle : null;
@@ -4015,7 +4076,7 @@ CH.Siege = (function () {
     const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero), might: CH.Meta.might(s, m.hero) } : null;
     const own = m.army, mergedArmy = { ...m.army };
     for (const x of m.allies || []) for (const t in x.army) mergedArmy[t] = (mergedArmy[t] || 0) + x.army[t];
-    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
+    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) + CH.Throne.buffs(s).atk };
     const dir = { x: m.tx - m.fx, y: m.ty - m.fy }, seed = (T % 1e9) | 0;
     let cfg, defender, target;
     if (tgt.type === 'kingdom') {
@@ -4171,12 +4232,14 @@ CH.Siege = (function () {
       ev.push({ kind: 'event', ev: e.ev });
     }
     CH.Invasion.update(s, T, ev);
+    if (CH.Realm) CH.Realm.update(s, T, ev);
     if (w.dragon && T > w.dragon.until) w.dragon = null;
   }
 
   function tick(s, now = Date.now()) {
     const w = W(s), ev = [];
     if (!w) return ev;
+    for (const k of w.kingdoms) if (k.__s !== s) Object.defineProperty(k, '__s', { value: s, enumerable: false, writable: true, configurable: true }); // lets AI read its royal buffs
     let t = w.lastTick;
     if (now - t > C.OFFLINE_CAP_H * 3600e3) {
       // The world "rests" beyond the cap: shift timers so nothing explodes.
@@ -4265,6 +4328,23 @@ CH.Siege = (function () {
     w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: cx, fy: cy, tx: m.fx, ty: m.fy, t0: now, t1: now + Math.max(5000, now - m.t0), cargo: {}, target: { type: 'home' } });
     return true;
   }
+  /** Speed up one of your marches: a March Boost halves the time left; gems arrive instantly. */
+  const marchGemCost = (m, now) => Math.max(2, Math.ceil((m.t1 - now) / 1000 / 20));
+  function speedMarch(s, id, how, now = Date.now()) {
+    const m = W(s).marches.find(x => x.id === id && x.owner === 'player');
+    if (!m || !['attack', 'scout', 'gather', 'return'].includes(m.kind) || m.t1 <= now) return { ok: false, reason: 'Nothing to speed up' };
+    const left = m.t1 - now;
+    if (how === 'item') {
+      if (!(s.items.marchBoost > 0)) return { ok: false, reason: 'You have no March Boost (Gem Shop)' };
+      s.items.marchBoost--;
+      const cut = left / 2; m.t0 -= cut; m.t1 -= cut; // keep the march visually where it is, move faster
+    } else {
+      const c = marchGemCost(m, now);
+      if (s.res.gems < c) return { ok: false, reason: 'Not enough gems (' + c + ')' };
+      s.res.gems -= c; m.t0 -= left; m.t1 = now;
+    }
+    return { ok: true };
+  }
   function occupiedNear(w, x, y, r = 2) {
     if (w.throne && Math.hypot(w.throne.x - x, w.throne.y - y) < 6) return true;
     if (Math.abs(w.px - x) <= r && Math.abs(w.py - y) <= r) return true;
@@ -4340,7 +4420,7 @@ CH.Siege = (function () {
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
-    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
+    sendMarch, recall, speedMarch, marchGemCost, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
     territoryBonus, onShield, findAny, campMonsters, clash, addReport, campRewards, dist, N, heroXp, PKEYS,
   };
 })();
@@ -4437,6 +4517,49 @@ CH.Throne = (function () {
   }
   const keyName = (s, key) => key === 'player' ? s.player.name : key === 'guard' ? 'Citadel Guardians' : key === 'none' ? 'Nobody (empty)' : (W(s).kingdoms.find(k => k.id === key) || { name: '?' }).name;
   const keyFaction = (s, key) => key === 'player' ? s.faction : (key === 'guard' || key === 'none') ? null : (W(s).kingdoms.find(k => k.id === key) || {}).f;
+  /* ---------------- Royal titles & buffs ---------------- */
+  const BUFF_NAMES = { atk: 'troop attack', march: 'march speed', def: 'troop defense & health', train: 'training speed', prod: 'production', research: 'research speed' };
+  const fmtBuffs = b => Object.entries(b).map(([k, v]) => (v > 0 ? '+' : '') + Math.round(v * 100) + '% ' + BUFF_NAMES[k]).join(', ');
+  function titleOfKey(s, key) { const th = W(s) && W(s).throne; if (!th || !th.titles) return null; for (const id in th.titles) if (th.titles[id] === key) return id; return null; }
+  /** Combined buffs for a kingdom key ('player' or AI id): king + royal title + realm rule. */
+  function buffs(s, key = 'player') {
+    const th = W(s) && W(s).throne, out = { atk: 0, march: 0, def: 0, train: 0, prod: 0, research: 0 };
+    if (!th) return out;
+    const add = b => { for (const k in b) out[k] += b[k]; };
+    if (th.king && th.king.key === key && th.king.until > Date.now()) add(TH.kingBuffs);
+    const t = titleOfKey(s, key); if (t) add(TH.titles[t].buffs);
+    if (CH.Realm) add(CH.Realm.rulerBuffs(s, key));
+    return out;
+  }
+  /** King grants (or revokes, with key null) a title. One holder per title; one title per kingdom. */
+  function grantTitle(s, titleId, key, now = Date.now()) {
+    const th = W(s).throne;
+    if (!isPlayerKing(s)) return { ok: false, reason: 'Only the king can grant titles' };
+    if (!TH.titles[titleId]) return { ok: false, reason: 'Unknown title' };
+    th.titles = th.titles || {};
+    if (!key) { delete th.titles[titleId]; return { ok: true }; }
+    if (key === 'player') return { ok: false, reason: 'The king already enjoys every royal buff' };
+    for (const id in th.titles) if (th.titles[id] === key) delete th.titles[id];
+    th.titles[titleId] = key;
+    const k = W(s).kingdoms.find(x => x.id === key), T = TH.titles[titleId];
+    if (k) { if (T.good) { k.grudge = 0; k.friendUntil = Math.max(k.friendUntil || 0, th.king.until); } else k.grudge = Math.min(5, (k.grudge || 0) + 2); }
+    W(s).news.unshift({ t: now, text: (T.good ? '🎖 ' : '🤡 ') + TH.title + ' ' + s.player.name + ' named ' + keyName(s, key) + ' the ' + T.name + '.', kind: 'event' });
+    return { ok: true };
+  }
+  /** An AI king hands out titles: honours to its faction, villain titles to those it hates. */
+  function aiKingTitles(s, T) {
+    const w = W(s), th = w.throne, kingK = w.kingdoms.find(k => k.id === th.king.key);
+    th.titles = {};
+    const friends = w.kingdoms.filter(k => k.f === th.king.f && k.id !== th.king.key).sort((a, b) => CH.World.power(b) - CH.World.power(a));
+    const goods = Object.keys(TH.titles).filter(t => TH.titles[t].good), bads = Object.keys(TH.titles).filter(t => !TH.titles[t].good);
+    if (s.faction === th.king.f) goods.splice(0, 1).forEach(t => { th.titles[t] = 'player'; });
+    goods.forEach((t, i) => { if (friends[i]) th.titles[t] = friends[i].id; });
+    const foes = w.kingdoms.filter(k => k.f !== th.king.f).sort((a, b) => CH.World.power(b) - CH.World.power(a));
+    const hatesYou = kingK && (kingK.grudge > 0 || kingK.nemesis) && s.faction !== th.king.f;
+    bads.forEach((t, i) => { if (i === 0 && hatesYou) th.titles[t] = 'player'; else if (foes[i]) th.titles[t] = foes[i].id; });
+    const mine = titleOfKey(s, 'player');
+    if (mine) { const Tt = TH.titles[mine]; CH.World.addReport(s, { t: T, kind: 'event', outcome: Tt.good ? 'win' : 'loss', title: (Tt.good ? '🎖 The king named you ' : '🤡 The king branded you ') + Tt.name + ' (' + fmtBuffs(Tt.buffs) + ')' }); }
+  }
   const kingName = s => { const t = W(s) && W(s).throne; return t && t.king ? keyName(s, t.king.key) : null; };
   const isPlayerKing = s => { const t = W(s) && W(s).throne; return !!(t && t.king && t.king.key === 'player' && t.king.until > Date.now()); };
 
@@ -4502,12 +4625,12 @@ CH.Throne = (function () {
     if (ranking.length) {
       const [key, ms] = ranking[0];
       th.king = { key, name: war.names[key] || keyName(s, key), f: keyFaction(s, key), since: T, until: warWindow(T).next, held: ms };
-      th.prizes = freshPrizes();
+      th.prizes = freshPrizes(); th.titles = {};
       th.history.unshift({ t: T, key, name: th.king.name, held: ms });
       if (key === 'player') CH.Meta.track(s, 'crowned', 1, T); th.history.length = Math.min(th.history.length, 10);
       w.news.unshift({ t: T, text: '👑 ' + th.king.name + ' held the ' + TH.name + ' for ' + U.time(ms / 1000) + ' and is crowned ' + TH.title + '!', kind: 'event' });
       th.burn = 0; th.smoke = T + 10 * MIN;
-      if (key !== 'player') aiKingGifts(s, T);
+      if (key !== 'player') { aiKingGifts(s, T); aiKingTitles(s, T); }
       CH.World.addReport(s, { t: T, kind: 'event', title: key === 'player' ? '👑 You are the ' + TH.title + '! Hand out the Citadel\'s treasure.' : '👑 ' + th.king.name + ' is the new ' + TH.title, outcome: key === 'player' ? 'win' : 'loss', coords: [th.x, th.y] });
       ev.push({ kind: 'report', report: s.reports[0], alert: key === 'player' });
     } else {
@@ -4694,7 +4817,7 @@ CH.Throne = (function () {
     return { power, kills, factions };
   }
 
-  return { kingName, withdraw, garrisonOf, reviveLater, REVIVE_MS, warLabel, warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
+  return { buffs, fmtBuffs, titleOfKey, grantTitle, BUFF_NAMES, kingName, withdraw, garrisonOf, reviveLater, REVIVE_MS, warLabel, warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
 })();
 
 </script>
@@ -4760,6 +4883,8 @@ CH.Meta = (function () {
     { id: 'exorcist', name: 'Exorcist', desc: 'Defeat 1,000 demon invaders', title: 'Exorcist', test: c => c.demonKills >= 1000, gems: 300 },
     { id: 'nemesis', name: 'Nemesis Breaker', desc: 'Defeat your Nemesis', title: 'Nemesis Breaker', test: c => c.nemesisWin >= 1, gems: 300 },
     { id: 'arena', name: 'Arena Champion', desc: 'Clear all 8 arena rounds', title: 'Arena Champion', test: c => c.arenaTop >= 8, gems: 400 },
+    { id: 'realm', name: 'Realm Breaker', desc: 'Conquer another world through its portal', title: 'Realm Breaker', test: c => c.realmWin >= 1, gems: 400 },
+    { id: 'emperor', name: 'Emperor of the Four Worlds', desc: 'Rule Eldoria, Xyrrath, Infernum and Elysium at the same time', title: 'Emperor of the Four Worlds', test: c => c.emperor >= 1, gems: 3000 },
     { id: 'faithful', name: 'Faithful', desc: 'Log in 7 days in a row', title: 'The Faithful', test: c => c.streak >= 7, gems: 200 },
   ];
   /* Season pass: 30 levels, 500 XP each, one season = 30 days. */
@@ -4880,6 +5005,21 @@ CH.Meta = (function () {
     s.gear.push(it);
     if (tier === 4) track(s, 'legendary', 1);
     return { ok: true, item: it };
+  }
+  /** Melt an unused item back into Iron Ore (60% of its iron, plus a little crystal for rare+). */
+  function smelt(s, itemId) {
+    ensure(s); const it = s.gear.find(g => g.id === itemId);
+    if (!it) return { ok: false, reason: 'Item not found' };
+    if (CH.HERO_ORDER.some(h => Object.values(s.heroes[h].gear).includes(itemId))) return { ok: false, reason: 'Unequip it first' };
+    const c = TIERS[it.tier].cost, got = { iron: Math.floor(c.iron * 0.6), crystal: it.tier >= 2 ? Math.floor((c.crystal || 0) * 0.3) : 0 };
+    s.gear = s.gear.filter(g => g !== it); s.mats.iron += got.iron; s.mats.crystal += got.crystal;
+    return { ok: true, got };
+  }
+  function buyMat(s, k) {
+    ensure(s); const o = CH.GEM_SHOP.mats[k];
+    if (!o) return { ok: false, reason: 'Not for sale' };
+    if (s.res.gems < o.gems) return { ok: false, reason: 'Not enough gems (' + o.gems + ')' };
+    s.res.gems -= o.gems; s.mats[k] = (s.mats[k] || 0) + o.n; return { ok: true, n: o.n };
   }
   function equip(s, hero, itemId) {
     ensure(s); const it = s.gear.find(g => g.id === itemId), H = s.heroes[hero];
@@ -5006,7 +5146,7 @@ CH.Meta = (function () {
     QUESTS, LOGIN, MATS, TIERS, SLOTS, TALENTS, ACH, ARENA_NAMES, SEASON_LV, LV_XP, PREMIUM_PRICE, seasonFree, seasonPrem, seasonEnds,
     ensure, refresh, track, give, claimQuest, claimDailyBonus, loginState, claimLogin, checkAchievements, setTitle, titleOf,
     seasonLevel, claimSeason, buyPremium, craft, equip, unequip, talentPoints, addTalent, resetTalents, might, marchBonus, campMats,
-    onPlayerBeat, tributeCost, truceCost, hireCost, tribute, truce, breakTruce, hire, arenaArmy, arenaReward, arenaFight, claimable, dayKey,
+    smelt, buyMat, onPlayerBeat, tributeCost, truceCost, hireCost, tribute, truce, breakTruce, hire, arenaArmy, arenaReward, arenaFight, claimable, dayKey,
   };
 })();
 
@@ -5060,12 +5200,12 @@ CH.Invasion = (function () {
   function launchWave(s, T, ev) {
     const w = W(s), inv = w.inv, kind = inv.id;
     inv.wave++;
-    const f = 0.4 + 0.08 * inv.wave;
+    const f = 0.75 + 0.15 * inv.wave; // waves start strong and keep growing
     const send = (x, y, target, power, boss) => {
       const sh = nearestShip(w, x, y), secs = Math.max(45, Math.hypot(sh.x - x, sh.y - y) * 3.5);
       w.marches.push({ id: 'm' + w.nextId++, owner: 'invader', kind: 'invade', inv: kind, fx: sh.x, fy: sh.y, tx: x, ty: y, t0: T, t1: T + secs * 1000, army: horde(kind, power, boss), target, cargo: {} });
     };
-    send(w.px, w.py, { type: 'player' }, CH.World.playerDefPower(s) * f, inv.wave >= 3);
+    send(w.px, w.py, { type: 'player' }, CH.World.playerDefPower(s) * f, inv.wave >= 2);
     for (const k of w.kingdoms) send(k.x, k.y, { type: 'kingdom', id: k.id }, CH.World.aiDefPower(k) * f, false);
     ev.push({ kind: 'invWave', wave: inv.wave });
   }
@@ -5085,7 +5225,7 @@ CH.Invasion = (function () {
     if (m.target.type === 'kingdom') {
       const k = w.kingdoms.find(x => x.id === m.target.id); if (!k) return;
       const att = Object.keys(m.army).reduce((a, u) => a + m.army[u] * ePow(u), 0), def = CH.World.aiDefPower(k);
-      const kills = Math.round(count(m.army) * U.clamp(def / Math.max(1, att) * 0.8, 0.15, 1));
+      const kills = Math.round(count(m.army) * U.clamp(def / Math.max(1, att) * 0.6, 0.1, 1));
       addKills(s, k.id, kills);
       if (def < att) k.burn = T + 4 * MIN; else k.smoke = T + 3 * MIN;
       return;
@@ -5096,7 +5236,7 @@ CH.Invasion = (function () {
     const hId = s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero) ? s.defenseHero : null;
     const hero = hId ? { id: hId, level: s.heroes[hId].level, skin: CH.State.heroSkin(s, hId), might: CH.Meta.might(s, hId, 'def') } : null;
     const cfg = CH.Siege.build({
-      attacker: { name: K.foe + ' (wave ' + w.inv.wave + ')', monsters: m.army, monsterMult: 1 },
+      attacker: { name: K.foe + ' (wave ' + w.inv.wave + ')', monsters: m.army, monsterMult: 1.2 + 0.05 * w.inv.wave },
       defender: { name: s.player.name, kind: 'player', cl, homeTerrain: true, layout: s.buildings.filter(b => b.level > 0).map(b => ({ type: b.type, level: b.level, tx: b.tx, ty: b.ty })), army: { ...s.army }, heroes: hero ? [hero] : [], hero, research: s.research.troops, fortBonus: 0.06 * (s.research.techs.fortification || 0) },
       formation: 'surround', dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
@@ -5119,7 +5259,7 @@ CH.Invasion = (function () {
     const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero), might: CH.Meta.might(s, m.hero) } : null;
     const cfg = CH.Siege.build({
       attacker: { name: s.player.name, army: m.army, hero, research: s.research.troops },
-      defender: { name: K.name + ' ' + (K.ship === 'saucer' ? 'Mothership' : 'Hell Portal'), kind: 'camp', cl: 6, layout: [{ type: 'outpost', level: 8, tx: 14, ty: 10 }], monsters: horde(w.inv.id, CH.World.armyPower(m.army) * 0.7, true), monsterMult: 1, heroes: [] },
+      defender: { name: K.name + ' ' + (K.ship === 'saucer' ? 'Mothership' : 'Hell Portal'), kind: 'camp', cl: 6, layout: [{ type: 'outpost', level: 8, tx: 14, ty: 10 }], monsters: horde(w.inv.id, CH.World.armyPower(m.army) * 1.0, true), monsterMult: 1.25, heroes: [] },
       formation: m.formation || 'surround', dir: { x: m.tx - m.fx, y: m.ty - m.fy }, seed: (T % 1e9) | 0, playerSide: 'atk',
     });
     const r = CH.Siege.run(cfg), kills = count(r.def.lost);
@@ -5154,6 +5294,139 @@ CH.Invasion = (function () {
   }
 
   return { KINDS, start, update, arrive, attackShip, ranking, rewardFor, horde, active, WAVE_EVERY };
+})();
+
+</script>
+  <script>/* js/core/realm.js */
+/* =====================================================================
+ * Eldoria — core/realm.js
+ * Realm Conquest: three times a week a portal opens to another world
+ * (alien Xyrrath, hellish Infernum, heavenly Elysium). Fight through
+ * three gates and storm the realm's citadel to rule that world for a
+ * week. Rule Eldoria and all three realms at once: Emperor of the Four
+ * Worlds. Fallen troops return after 5 minutes, like the Throne War.
+ * ===================================================================== */
+CH.REALMS = {
+  /* ===== REALM SCHEDULE (edit here) — day: 0 Sunday … 6 Saturday, hour 0–23, minute, minutes open ===== */
+  alien: { name: 'Xyrrath', full: 'Xyrrath, the Alien World', icon: '👽', day: 2, hour: 20, minute: 0, minutes: 60, color: '#5fffa0',
+    units: ['alienDrone', 'alienTrooper', 'alienBrute'], boss: 'alienOverlord', title: 'Conqueror of Xyrrath', buffs: { march: 0.10, atk: 0.05 } },
+  hell: { name: 'Infernum', full: 'Infernum, the Burning Realm', icon: '🔥', day: 4, hour: 20, minute: 0, minutes: 60, color: '#ff6a3a',
+    units: ['imp', 'darkKnight', 'ogre'], boss: 'demonLord', title: 'Lord of Infernum', buffs: { atk: 0.10 } },
+  heaven: { name: 'Elysium', full: 'Elysium, the Celestial Realm', icon: '✨', day: 0, hour: 20, minute: 0, minutes: 60, color: '#ffe9a0',
+    units: ['seraph', 'celestialKnight', 'valkyrie'], boss: 'archangel', title: 'Sovereign of Elysium', buffs: { def: 0.10, research: 0.10 } },
+};
+CH.REALM_ORDER = ['alien', 'hell', 'heaven'];
+CH.Realm = (function () {
+  const U = CH.util, MIN = 60000, DAY = 864e5;
+  const STAGES = [
+    { name: 'Outer Gate', mult: 0.55 }, { name: 'Legion Camp', mult: 0.7 }, { name: 'Inner Sanctum', mult: 0.85 }, { name: 'Realm Citadel', mult: 1.0, citadel: true },
+  ];
+  const W = s => s.world;
+  function window_(id, T) {
+    const R = CH.REALMS[id], d = new Date(T);
+    let st = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() - R.day + 7) % 7), R.hour, R.minute || 0).getTime();
+    if (st > T) st = new Date(new Date(st).getFullYear(), new Date(st).getMonth(), new Date(st).getDate() - 7, R.hour, R.minute || 0).getTime();
+    const next = new Date(new Date(st).getFullYear(), new Date(st).getMonth(), new Date(st).getDate() + 7, R.hour, R.minute || 0).getTime();
+    return { start: st, end: st + R.minutes * MIN, next, active: T >= st && T < st + R.minutes * MIN };
+  }
+  const label = id => { const R = CH.REALMS[id]; return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][R.day] + ' ' + String(R.hour).padStart(2, '0') + ':' + String(R.minute || 0).padStart(2, '0'); };
+  function ensure(w) { w.realms = w.realms || {}; for (const id of CH.REALM_ORDER) w.realms[id] = w.realms[id] || { win: 0, stage: 0, cd: 0, ruler: null, history: [] }; return w.realms; }
+  const ruler = (s, id, T = Date.now()) => { const r = ensure(W(s))[id]; return r.ruler && r.ruler.until > T ? r.ruler : null; };
+  function rulerBuffs(s, key) { const out = {}; if (!W(s)) return out; for (const id of CH.REALM_ORDER) { const r = ruler(s, id); if (r && r.key === key) for (const b in CH.REALMS[id].buffs) out[b] = (out[b] || 0) + CH.REALMS[id].buffs[b]; } return out; }
+  const ePow = id => { const e = CH.ENEMIES[id]; return Math.max(1, Math.sqrt(e.hp / (1 - (e.armor || 0)) * e.dmg * e.rate) / 3); };
+
+  /** Enemy strength scales with the strongest armies around so the realms stay hard. */
+  function stageArmy(s, id, i) {
+    const R = CH.REALMS[id], w = W(s);
+    const top = w.kingdoms.map(k => CH.World.armyPower(k.tr)).sort((a, b) => b - a).slice(0, 5);
+    // Strong but beatable: tied to the world's strongest armies, and never trivial for you.
+    const base = Math.max(CH.World.armyPower(s.army) * 0.75, top.reduce((a, n) => a + n, 0) / Math.max(1, top.length) * 0.8, 6000);
+    const p = base * STAGES[i].mult, a = {}, share = [0.45, 0.35, 0.2];
+    R.units.forEach((u, k) => { a[u] = Math.max(1, Math.round(p * share[k] / ePow(u))); });
+    if (STAGES[i].citadel && CH.ENEMIES[R.boss]) a[R.boss] = Math.min(3, 1 + Math.floor(base / 250000));
+    return a;
+  }
+  function stageReward(i) { return i === 3 ? { gems: 800, mats: { crystal: 20, dragonscale: 5 }, items: { shield8h: 1, speed1h: 3 } } : { gems: 80 + i * 60, mats: { iron: 20 + i * 15, leather: 20 + i * 15, crystal: 2 + i * 3 } }; }
+
+  function update(s, T, ev) {
+    const w = W(s), rs = ensure(w);
+    for (const id of CH.REALM_ORDER) {
+      const r = rs[id], win = window_(id, T);
+      if (win.active && r.win !== win.start) {
+        r.win = win.start; r.stage = 0; r.cd = 0; r.closed = false;
+        w.news.unshift({ t: T, text: CH.REALMS[id].icon + ' A portal to ' + CH.REALMS[id].full + ' has opened for ' + CH.REALMS[id].minutes + ' minutes! Storm its citadel to rule that world for a week.', kind: 'event' });
+        ev.push({ kind: 'realmOpen', id });
+      }
+      if (r.win && !r.closed && T >= r.win + CH.REALMS[id].minutes * MIN) {
+        r.closed = true;
+        if (!(r.ruler && r.ruler.key === 'player' && r.ruler.since >= r.win)) {
+          // The strongest AI kingdom claims the realm if you didn't.
+          const champ = w.kingdoms.slice().sort((a, b) => CH.World.power(b) - CH.World.power(a))[0];
+          r.ruler = { key: champ.id, since: T, until: window_(id, T).next };
+          w.news.unshift({ t: T, text: CH.REALMS[id].icon + ' ' + champ.name + ' conquered ' + CH.REALMS[id].name + ' and rules it this week.', kind: 'event' });
+        }
+      }
+    }
+    checkEmperor(s, T, ev);
+  }
+
+  /** Fight the next stage. Your whole home army fights; the fallen return in 5 minutes. */
+  function fight(s, id, heroId, T = Date.now()) {
+    const w = W(s), r = ensure(w)[id], R = CH.REALMS[id], win = window_(id, T);
+    if (!win.active) return { ok: false, reason: 'The portal to ' + R.name + ' opens ' + label(id) };
+    if (r.win !== win.start) { r.win = win.start; r.stage = 0; r.cd = 0; }
+    if (r.stage >= 4) return { ok: false, reason: 'You already rule ' + R.name + ' this week' };
+    if (r.cd > T) return { ok: false, reason: 'Your army regroups: ' + U.time((r.cd - T) / 1000) };
+    const army = {}; for (const t in s.army) if (s.army[t] > 0) army[t] = s.army[t];
+    if (!Object.keys(army).length) return { ok: false, reason: 'You need troops at home' };
+    const i = r.stage, ST = STAGES[i];
+    const hero = heroId && s.heroes[heroId] && s.heroes[heroId].unlocked ? { id: heroId, level: s.heroes[heroId].level, skin: CH.State.heroSkin(s, heroId), might: CH.Meta.might(s, heroId) } : null;
+    const cfg = CH.Siege.build({
+      attacker: { name: s.player.name, army, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + CH.Throne.buffs(s).atk },
+      defender: { name: R.name + ' · ' + ST.name, kind: 'camp', cl: ST.citadel ? 6 : 5, layout: ST.citadel ? CH.Throne.layout() : [{ type: 'outpost', level: 6 + i, tx: 14, ty: 10 }], monsters: stageArmy(s, id, i), monsterMult: 1.05 + 0.07 * i, heroes: [] },
+      formation: 'surround', dir: { x: 1, y: 0.3 }, seed: (T % 1e9) | 0, playerSide: 'atk',
+    });
+    cfg.names = { atk: s.player.name, def: R.name + ' · ' + ST.name };
+    const res = CH.Siege.run(cfg), won = res.outcome === 'win';
+    // The fallen return home after 5 minutes.
+    CH.Throne.reviveLater(s, 'player', res.atk.lost, T);
+    for (const t in res.atk.lost) s.army[t] = Math.max(0, (s.army[t] || 0) - res.atk.lost[t]);
+    const kills = Object.values(res.def.lost).reduce((a, n) => a + n, 0);
+    s.stats.kills += kills; CH.Meta.track(s, 'kills', kills, T);
+    let rw = null;
+    if (won) {
+      r.stage++; rw = stageReward(i); CH.Meta.give(s, rw);
+      if (r.stage >= 4) {
+        r.ruler = { key: 'player', since: T, until: win.next };
+        r.history.unshift({ t: T, key: 'player' }); r.history.length = Math.min(r.history.length, 8);
+        CH.Meta.track(s, 'realmWin', 1, T); CH.Meta.track(s, 'realm_' + id, 1, T);
+        w.news.unshift({ t: T, text: R.icon + ' ' + s.player.name + ' stormed the citadel of ' + R.name + ' and rules ' + R.full + '!', kind: 'event' });
+      }
+    } else r.cd = T + 3 * MIN;
+    const rep = CH.World.addReport(s, { t: T, kind: 'realm', you: 'atk', outcome: won ? 'win' : 'loss',
+      title: R.icon + ' ' + R.name + ' · ' + ST.name + (won ? (r.stage >= 4 ? ': CONQUERED! You rule ' + R.name : ': cleared') : ': repelled'),
+      atk: { name: s.player.name, sent: res.atk.sent, lost: res.atk.lost, hero: heroId }, def: { name: cfg.names.def, sent: res.def.sent, lost: res.def.lost },
+      reward: rw ? { gems: rw.gems, mats: rw.mats } : {}, items: rw && rw.items || {}, revive: true, time: Math.round(res.time), replay: cfg });
+    if (rw && rw.items) for (const it in rw.items) { /* already given by Meta.give */ }
+    const ev = []; checkEmperor(s, T, ev);
+    return { ok: true, won, stage: r.stage, report: rep, emperor: ev.length > 0 };
+  }
+
+  /** King of Eldoria + ruler of all three realms at the same time. */
+  function checkEmperor(s, T, ev) {
+    const m = CH.Meta.ensure(s), w = W(s);
+    const all = CH.Throne.isPlayerKing(s) && CH.REALM_ORDER.every(id => { const r = ruler(s, id, T); return r && r.key === 'player'; });
+    const week = Math.floor(T / (7 * DAY));
+    if (all && m.emperorWeek !== week) {
+      m.emperorWeek = week; CH.Meta.track(s, 'emperor', 1, T); CH.Meta.give(s, { gems: 2000, mats: { dragonscale: 10, crystal: 40 } });
+      w.news.unshift({ t: T, text: '🌌 ' + s.player.name + ' rules Eldoria, Xyrrath, Infernum and Elysium: EMPEROR OF THE FOUR WORLDS!', kind: 'event' });
+      const rep = CH.World.addReport(s, { t: T, kind: 'event', outcome: 'win', title: '🌌 You are the Emperor of the Four Worlds! +2,000 gems', reward: { gems: 2000 } });
+      ev.push({ kind: 'report', report: rep, alert: true });
+    }
+  }
+  const isEmperor = (s, T = Date.now()) => CH.Throne.isPlayerKing(s) && CH.REALM_ORDER.every(id => { const r = ruler(s, id, T); return r && r.key === 'player'; });
+
+  return { STAGES, window: window_, label, ensure, ruler, rulerBuffs, stageArmy, stageReward, update, fight, isEmperor };
 })();
 
 </script>
@@ -5590,6 +5863,25 @@ CH.Art = (function () {
       line(c, -s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14); line(c, s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14);
       c.save(); c.translate(0, -s * 1.8); c.rotate(o.swing ? 0.9 : -0.6); line(c, -s * 0.6, 0, s * 1.4, 0, '#7a5a3a', s * 0.12); rect(c, -s * 0.8, -s * 0.1, s * 0.4, s * 0.5, '#4a4038'); c.restore();
     },
+    seraph(c, s, a) {
+      const f = Math.sin(a * 9) * s * 0.4;
+      for (const sx of [-1, 1]) for (const k of [0, 1, 2]) poly(c, [0, -s * (1.2 + k * 0.15), sx * s * (1.4 - k * 0.2), -s * (1.9 - k * 0.45) + f * (k === 0 ? 1 : 0.5), sx * s * 0.3, -s * (0.9 + k * 0.2)], k ? '#fff6d8' : '#ffffff', 'rgba(200,170,90,0.5)', 1);
+      ell(c, 0, -s * 0.9, s * 0.3, s * 0.5, '#f4efe2'); circle(c, 0, -s * 1.55, s * 0.24, '#f2d2b0');
+      c.beginPath(); c.ellipse(0, -s * 1.95, s * 0.28, s * 0.08, 0, 0, 6.283); c.strokeStyle = '#ffd34a'; c.lineWidth = s * 0.08; c.stroke();
+    },
+    celestialKnight: (c, s, a, o) => humanoid(c, s, a, { body: '#f2e2a8', helm: '#ffd34a', visor: true, plume: '#ffffff', cape: '#f4efe2', weapon: 'sword', shield: '#ffd34a', swing: o.swing }),
+    valkyrie(c, s, a, o) {
+      const f = Math.sin(a * 10) * s * 0.5;
+      for (const sx of [-1, 1]) poly(c, [sx * s * 0.2, -s * 1.3, sx * s * 1.5, -s * 2.0 + f, sx * s * 1.1, -s * 1.0], '#e8eef8', 'rgba(120,140,170,0.5)', 1);
+      humanoid(c, s * 0.9, a, { body: '#c8d4e8', helm: '#d0d8e4', plume: '#ffd34a', weapon: 'spear', swing: o.swing, hair: '#ffe08a' });
+    },
+    archangel(c, s, a) {
+      const f = Math.sin(a * 4) * s * 0.3;
+      c.save(); c.globalCompositeOperation = 'lighter'; glow(c, 0, -s * 1.4, s * 2.2, '255,236,160', 0.35); c.restore();
+      for (const sx of [-1, 1]) for (const k of [0, 1]) poly(c, [sx * s * 0.25, -s * (1.5 + k * 0.2), sx * s * (2.2 - k * 0.5), -s * (2.6 - k * 0.6) + f, sx * s * (1.4 - k * 0.3), -s * (0.9 + k * 0.3)], k ? '#fff3c8' : '#ffffff', 'rgba(200,170,90,0.6)', 1.5);
+      humanoid(c, s, a, { body: '#ffffff', helm: '#ffd34a', cape: '#ffe08a', weapon: 'sword', plume: '#ffd34a' });
+      c.beginPath(); c.ellipse(0, -s * 2.15, s * 0.35, s * 0.1, 0, 0, 6.283); c.strokeStyle = '#ffd34a'; c.lineWidth = s * 0.1; c.stroke();
+    },
     alienDrone(c, s, a) {
       const b = Math.sin(a * 8) * s * 0.1;
       ell(c, 0, -s * 1.1 + b, s * 1.1, s * 0.35, '#9aa6b8'); ell(c, 0, -s * 1.2 + b, s * 0.9, s * 0.22, '#c8d2e0');
@@ -6004,7 +6296,7 @@ CH.View = (function () {
   function drawHome(view, save, ui, time) {
     const c = view.begin(0, 'forest');
     const cl = CH.State.castleLevel(save), area = CH.State.area(save);
-    c.drawImage(terrain('home' + cl, { area, seed: 11 + cl }), 0, 0);
+    c.drawImage(terrain('homeFixed', { area, seed: 19 }), 0, 0);
     const list = save.buildings.slice().sort((a, b) => (a.ty + CH.BUILDINGS[a.type].size) - (b.ty + CH.BUILDINGS[b.type].size) || a.tx - b.tx);
     const links = wallLinks(save.buildings, b => b.level > 0 && !(ui.moving && ui.moving.id === b.id));
     const now = Date.now();
@@ -6028,7 +6320,7 @@ CH.View = (function () {
         hpBar(c, cx - 22, b.ty * T - 12, 44, f, '#7fd36a');
         c.font = '700 10px system-ui, sans-serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.7)';
         const txt = CH.util.time((b.job.ends - now) / 1000); c.strokeText(txt, cx, b.ty * T - 16); c.fillStyle = '#fff'; c.fillText(txt, cx, b.ty * T - 16);
-      } else if (d.cat === 'econ' && b.level > 0 && b.buf >= Math.max(10, d.buf(b.level) * 0.08)) {
+      } else if (d.cat === 'econ' && b.level > 0 && b.buf >= Math.max(10, d.buf(b.level) * 0.08) && CH.State.canCollectB(save, b)) {
         const y = b.ty * T - 10 + Math.sin(time * 3 + b.id) * 2;
         A.circle(c, cx, y, 10, 'rgba(20,24,40,0.85)'); A.circle(c, cx, y, 8.5, d.res === 'gold' ? '#f2c94a' : d.res === 'wood' ? '#b8803e' : '#bdb8ae');
         if (b.buf >= d.buf(b.level) * 0.999) { c.beginPath(); c.arc(cx, y, 11, 0, Math.PI * 2); c.strokeStyle = '#ffdf6a'; c.lineWidth = 2; c.stroke(); }
@@ -6058,10 +6350,10 @@ CH.View = (function () {
       const st = b.stage, reg = st.region;
       return terrain('camp' + st.id, { pal: reg.pal, roads: b.roads.map(r => r.pts), decor: reg.decor, seed: 300 + st.gi, blockedDecor: b.decor, keepOut: (tx, ty) => b.road[ty * C.COLS + tx] || b.nearRoad(tx, ty, 1) || b.occ[ty * C.COLS + tx] || tx > 18 });
     }
-    if (b.mode === 'siege' && b.homeTerrain) { const cl = Math.min(8, b.opponent.cl); const [w, h] = C.AREA[cl - 1]; return terrain('home' + cl, { area: { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h }, seed: 11 + cl }); }
+    if (b.mode === 'siege' && b.homeTerrain) return terrain('homeFixed', { area: { ...C.HOME_AREA }, seed: 19 });
     if (b.mode === 'raid' || b.mode === 'siege') { const cl = Math.min(8, b.opponent.cl); return terrain('raid' + cl, { area: (() => { const [w, h] = C.AREA[cl - 1]; return { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h }; })(), seed: 50 + cl }); }
     const cl = CH.State.castleLevel(b.save);
-    return terrain('home' + cl, { area: CH.State.area(b.save), seed: 11 + cl });
+    return terrain('homeFixed', { area: CH.State.area(b.save), seed: 19 });
   }
 
   function drawBattle(view, b, ui, time) {
@@ -6119,6 +6411,7 @@ CH.View = (function () {
       switch (p.kind) {
         case 'arrow': { const a = p.a || 0; A.line(c, p.x - Math.cos(a) * 11, p.y - Math.sin(a) * 11, p.x, p.y, '#d9b16a', 1.6); A.line(c, p.x - Math.cos(a) * 2, p.y - Math.sin(a) * 2, p.x + Math.cos(a) * 2, p.y + Math.sin(a) * 2, '#eee', 2.2); break; }
         case 'laser': { const a = p.a || Math.atan2(p.vy || 0, p.vx || 1); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#5fffa0', 3); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#eafff2', 1); break; }
+        case 'holy': A.circle(c, p.x, p.y, 5, 'rgba(255,240,170,0.5)'); A.circle(c, p.x, p.y, 2.6, '#fffbe0'); break;
         case 'rock': A.circle(c, p.x, p.y, 5, '#8a7e6a'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.8, '#b8ae9a'); break;
         case 'ball': A.circle(c, p.x, p.y, 4.5, '#1c1b20'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.5, 'rgba(255,255,255,0.4)'); break;
         case 'orb': A.glow(c, p.x, p.y, 12, '190,150,255', 0.8); A.circle(c, p.x, p.y, 3, '#fff'); break;
@@ -6270,6 +6563,7 @@ CH.WorldView = (function () {
       for (const fo of w.forts) if (vis(fo)) this.fort(c, fo);
       if (w.throne) this.citadel(c, w.throne, now, s);
       if (w.inv) for (const sh of w.inv.ships) this.ship(c, sh, w.inv.id, now);
+      { const id = CH.REALM_ORDER.find(r => CH.Realm.window(r, now).active); if (id && w.throne) this.portal(c, w.throne.x + 6, w.throne.y - 5, id, now); }
       const pPow = CH.State.power(s);
       if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) this.kingdom(c, k2, now, false);
       this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name, burn: w.pburn, smoke: w.psmoke, skin: s.equipped && s.equipped.castle }, now, true);
@@ -6308,6 +6602,17 @@ CH.WorldView = (function () {
         if (z > 0.6 && f.mon) for (const m of w.camps) if (vis(m) && !m.dead) label(m.x, m.y, 'Lv ' + m.lvl, '#ffb3a8', 24);
         if (z > 0.6 && f.res) for (const t of w.tiles) if (vis(t)) label(t.x, t.y, 'Lv ' + t.lvl, '#e8f2d8', 22);
       }
+    }
+    /** Realm portal next to the Citadel while a Realm Conquest is open. */
+    portal(c, x0, y0, id, now) {
+      const R = CH.REALMS[id], x = (x0 + 0.5) * TW, y = (y0 + 0.5) * TW, t = now / 1000;
+      const rgb = { alien: '120,255,170', hell: '255,110,60', heaven: '255,236,160' }[id];
+      c.save(); c.translate(x, y);
+      c.globalCompositeOperation = 'lighter'; A.glow(c, 0, 0, 80, rgb, 0.45); c.globalCompositeOperation = 'source-over';
+      A.rect(c, -34, -10, 10, 50, '#d8d0bc'); A.rect(c, 24, -10, 10, 50, '#d8d0bc'); A.rect(c, -38, -16, 76, 10, '#e8e0cc');
+      for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(0, 14, 22 - i * 4, 26 - i * 5, 0, 0, 6.283); c.strokeStyle = 'rgba(' + rgb + ',' + (0.9 - i * 0.15) + ')'; c.lineWidth = 4; c.setLineDash([10, 6]); c.lineDashOffset = (i % 2 ? 1 : -1) * t * 40; c.stroke(); }
+      c.setLineDash([]); c.font = '900 22px system-ui'; c.textAlign = 'center'; c.fillText(R.icon, 0, 22);
+      c.restore();
     }
     /** Invasion mothership (aliens) or hell portal (demons). */
     ship(c, sh, kind, now) {
@@ -6578,6 +6883,8 @@ CH.Home = (function () {
       '<button class="icon-btn" id="hud-settings" aria-label="Settings">' + UI.icon('gear') + '</button>';
     $('alert').onclick = () => { CH.Audio.play('click'); CH.WorldUI.incomingModal(); };
     $('warbar').onclick = () => { CH.Audio.play('click'); const w = CH.App.save.world, th = w.throne, war = th.war && !th.war.ended && Date.now() < th.war.end;
+      const openRealm = CH.REALM_ORDER.find(id => CH.Realm.window(id, Date.now()).active);
+      if (!war && openRealm) { UI.sheet('realms', openRealm); return; }
       if (!war && w.inv) { const sh = w.inv.ships[0]; CH.WorldUI.open(sh); CH.WorldUI.select({ type: 'ship', o: sh }); return; }
       CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
     $('hud').onclick = e => {
@@ -6620,7 +6927,7 @@ CH.Home = (function () {
   function moreMenu() {
     const s = CH.App.save;
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['daily', 'time', 'Daily' + (CH.Meta.claimable(s) ? ' ●' : '')], ['season', 'crown', 'Season Pass'], ['arena', 'swords', 'Arena'], ['forge', 'hammer', 'Forge'], ['achievements', 'crown', 'Achievements'],
+      [['daily', 'time', 'Daily' + (CH.Meta.claimable(s) ? ' ●' : '')], ['realms', 'map', 'Realms' + (CH.REALM_ORDER.some(id => CH.Realm.window(id, Date.now()).active) ? ' ●' : '')], ['season', 'crown', 'Season Pass'], ['arena', 'swords', 'Arena'], ['forge', 'hammer', 'Forge'], ['achievements', 'crown', 'Achievements'],
         ['redeem', 'gems', 'Redeem code'], ['store', 'gems', 'Gem Shop'], ['ranks', 'crown', 'Ranks'], ['skins', 'shield', 'Skins'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
@@ -6675,7 +6982,7 @@ CH.Home = (function () {
   }
   // Tasks start expanded on wide screens and collapsed (first task only) on phones.
   const tasksOpen = () => (st.tasksOpen === undefined ? window.innerWidth > 760 : st.tasksOpen);
-  const canCollect = () => save().buildings.some(b => B[b.type].cat === 'econ' && b.buf >= 10);
+  const canCollect = () => save().buildings.some(b => S.canCollectB(save(), b) && b.buf >= 10);
 
   /* ---------------- Selection & panel ---------------- */
   function buildingAt(x, y) {
@@ -6725,7 +7032,7 @@ CH.Home = (function () {
       if (d.cat === 'econ' && b.level) status = (status ? status + ' · ' : '') + U.fmt(b.buf) + ' / ' + U.fmt(d.buf(b.level)) + ' ready';
       if (b.job) actions.push('<button class="btn btn-gem" data-p="speed"' + (s.res.gems >= S.speedUpCost(b) ? '' : ' disabled') + '>Finish now ' + UI.icon('gems') + S.speedUpCost(b) + '</button>');
       if (b.job) for (const it of ['speed5m', 'speed1h']) if (s.items[it] > 0) actions.push('<button class="btn" data-p="item" data-item="' + it + '">' + CH.ITEMS[it].name.replace('Speed-up ', '−') + ' (' + s.items[it] + ')</button>');
-      if (d.cat === 'econ' && b.level) actions.push('<button class="btn" data-p="collect"' + (b.buf >= 1 ? '' : ' disabled') + '>Collect</button>');
+      if (d.cat === 'econ' && b.level) actions.push(s.res[d.res] >= S.capacity(s, d.res) ? '<span class="muted">' + d.res + ' is full (' + U.fmt(s.res[d.res]) + ' / ' + U.fmt(S.capacity(s, d.res)) + '): spend some or build storage to collect</span>' : '<button class="btn" data-p="collect"' + (b.buf >= 1 ? '' : ' disabled') + '>Collect</button>');
       if (!b.job && d.maxLevel > 1) {
         const why = S.upgradeBlocker(s, b);
         const maxed = b.level >= Math.min(d.maxLevel, b.type === 'castle' ? 8 : 99);
@@ -6803,7 +7110,7 @@ CH.Home = (function () {
   function collectOne(b) {
     const d = B[b.type], amt = S.collect(save(), b.id);
     if (amt > 0) { floater((b.tx + 1) * T, b.ty * T, '+' + U.fmt(amt), d.res === 'gold' ? '#ffe07a' : d.res === 'wood' ? '#e8b878' : '#e0ddd6'); CH.Audio.play('collect'); persist(); refreshHud(); }
-    else if (b.buf >= 1) { UI.toast('Your ' + (d.res === 'gold' ? 'gold vaults are' : d.res === 'wood' ? 'timber yards are' : 'stone depots are') + ' full. Build or upgrade storage.', 'warn'); CH.Audio.play('error'); }
+    else if (b.buf >= 1) { UI.toast('Your ' + d.res + ' storage is full. Nothing was lost: spend some or build more storage.', 'warn'); CH.Audio.play('error'); }
   }
   function collectAll() {
     const s = save(), before = s.buildings.filter(b => B[b.type].cat === 'econ').map(b => ({ b, buf: b.buf }));
@@ -6885,7 +7192,7 @@ CH.Home = (function () {
       }
       const b = buildingAt(p.x, p.y);
       if (!b) return deselect();
-      if (B[b.type].cat === 'econ' && b.level && b.buf >= Math.max(10, B[b.type].buf(b.level) * 0.08) && st.selected !== b) { collectOne(b); select(b); return; }
+      if (S.canCollectB(save(), b) && b.buf >= Math.max(10, B[b.type].buf(b.level) * 0.08) && st.selected !== b) { collectOne(b); select(b); return; }
       CH.Audio.play('click');
       select(b);
     },
@@ -7069,6 +7376,16 @@ CH.Screens = (function () {
     };
   }
 
+  /** Inline speed-up buttons placed right next to whatever is being built or researched. */
+  function speedBtns(target, gemCost, gemAct, id) {
+    const s = save();
+    return '<div class="inline-speed">' + ['speed5m', 'speed1h'].filter(i => s.items[i] > 0).map(i => '<button class="btn btn-quiet" data-act="sitem" data-item="' + i + '" data-target=\'' + JSON.stringify(target) + '\'>' + (i === 'speed5m' ? '−5m' : '−1h') + ' ×' + s.items[i] + '</button>').join('') +
+      '<button class="btn btn-gem" data-act="' + gemAct + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>' + icon('gems') + gemCost + '</button></div>';
+  }
+  const speedActs = {
+    sitem: b => { const r = S.useItem(save(), b.dataset.item, Date.now(), JSON.parse(b.dataset.target)); if (!r.ok) return fail(r); CH.App.handleEvents(S.tick(save())); persist(); UI.refreshSheet(); },
+  };
+
   /* ---------------- Army (training per military building) ---------------- */
   const TRAINERS = ['barracks', 'archeryRange', 'stable', 'siegeWorkshop'];
   function jobBox(job, target, label) {
@@ -7174,16 +7491,19 @@ CH.Screens = (function () {
 
   function events() {
     const s = save(), w = s.world, now = Date.now(), e = CH.World.eventAt(w, now);
-    const upcoming = [1, 2, 3].map(i => CH.EVENTS[(((e.idx + i) % CH.EVENTS.length) + CH.EVENTS.length) % CH.EVENTS.length]);
+    const sched = CH.MetaUI.schedule(s, now, 8);
+    const when = t => { const d = new Date(t); return (d.toDateString() === new Date(now).toDateString() ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const live = []; for (const id of CH.REALM_ORDER) if (CH.Realm.window(id, now).active) live.push('<button class="btn btn-gold" data-act="realm" data-id="' + id + '">' + CH.REALMS[id].icon + ' Portal to ' + CH.REALMS[id].name + ' is OPEN</button>');
     return {
       title: 'World events',
       html: '<div class="panel ev-now"><span class="kicker">' + (e.active ? 'Live now · ends in ' + U.time((e.ends - now) / 1000) : 'Next event in ' + U.time((e.next - now) / 1000)) + '</span><h3>' + e.ev.name + '</h3><p>' + e.ev.desc + '</p>' +
         (e.active && e.ev.id === 'dragonHunt' && w.dragon ? '<button class="btn btn-gold" data-act="dragon">Find the dragon</button>' : '') + '</div>' +
         (w.inv || w.invLast ? '<h4 class="group">' + CH.Invasion.KINDS[(w.inv || w.invLast).id].icon + ' Invasion kill ranking' + (w.inv ? ' (live)' : ' (last)') + '</h4><div class="ranks">' + CH.Invasion.ranking(s).slice(0, 10).map((r, i) => '<div class="rank-row' + (r.key === 'player' ? ' me' : '') + '"><span class="rk">' + (i + 1) + '</span><b>' + esc(r.name) + '</b><span></span><span class="rv">' + U.fmt(r.kills) + ' ☠</span></div>').join('') + '</div>' +
           (w.inv ? '<p class="muted">Your reward if it ended now: ' + UI.reward(CH.Invasion.rewardFor(w.inv.kills.player || 0, CH.Invasion.ranking(s).findIndex(r => r.key === 'player') + 1 || 99)) + '</p>' : '') : '') +
-        '<h4 class="group">Coming up</h4><div class="b-list">' + upcoming.map(x => '<div class="b-row"><div class="b-info"><b>' + x.name + '</b><span class="muted">' + x.desc + '</span></div></div>').join('') + '</div>' +
+        (live.length ? '<div class="row">' + live.join('') + '</div>' : '') +
+        '<h4 class="group">Coming up</h4><div class="b-list">' + sched.map(x => '<div class="b-row"><span class="when">' + when(x.t) + '<i>in ' + U.time((x.t - now) / 1000) + '</i></span><div class="b-info"><b>' + x.name + '</b><span class="muted">' + x.desc + '</span></div></div>').join('') + '</div>' +
         '<h4 class="group">News of the realm</h4><ul class="news">' + w.news.slice(0, 20).map(n => '<li><span class="muted">' + U.time((now - n.t) / 1000) + ' ago</span> ' + esc(n.text) + '</li>').join('') + '</ul>',
-      on: { dragon: () => { UI.closeSheets(); CH.WorldUI.open(w.dragon); } },
+      on: { dragon: () => { UI.closeSheets(); CH.WorldUI.open(w.dragon); }, realm: b => UI.sheet('realms', b.dataset.id) },
     };
   }
 
@@ -7212,12 +7532,15 @@ CH.Screens = (function () {
     const ico = r => ({ attack: '⚔', defense: '🛡', scout: '👁', monster: '🐉', gather: '⛏', fort: '🏰', event: '★' }[r.kind] || '✉');
     return {
       title: 'Reports',
-      html: '<div class="tabs">' + [['all', 'All'], ['battle', 'Battles'], ['scout', 'Scouting'], ['gather', 'Gathering']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '<button class="btn btn-quiet" data-act="readall">Mark all read</button></div>' +
+      html: '<div class="tabs">' + [['all', 'All'], ['battle', 'Battles'], ['scout', 'Scouting'], ['gather', 'Gathering']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '<button class="btn btn-quiet" data-act="readall">Mark all read</button><button class="btn btn-quiet" data-act="clearread">Clear read</button><button class="btn btn-quiet" data-act="clearall">Clear all</button></div>' +
         (list.length ? '<div class="b-list">' + list.map(r => '<button class="b-row rep-row ' + (r.read ? '' : 'unread ') + (r.outcome || '') + '" data-act="open" data-id="' + r.id + '"><span class="rep-ico">' + ico(r) + '</span><div class="b-info"><b>' + esc(r.title) + '</b><span class="muted">' + U.time((Date.now() - r.t) / 1000) + ' ago' + (r.replay ? ' · replay available' : '') + '</span></div></button>').join('') + '</div>' : '<p class="muted">No reports yet.</p>'),
       on: {
         tab: b => { mail.tab = b.dataset.t; UI.refreshSheet(); },
         open: b => { const r = s.reports.find(x => x.id === b.dataset.id); if (r) CH.WorldUI.showReport(r); setTimeout(() => UI.refreshSheet(), 50); },
         readall: () => { for (const r of s.reports) r.read = true; s.unread = 0; persist(); UI.refreshSheet(); },
+        clearread: () => { s.reports = s.reports.filter(r => !r.read); persist(); UI.refreshSheet(); },
+        clearall: () => UI.modal('<h3>Delete all reports?</h3><p>Battle reports and their replays will be removed.</p><div class="row"><button class="btn btn-danger" data-ca>Delete all</button><button class="btn" data-close>Cancel</button></div>',
+          { onClick: e => { if (e.target.closest('[data-ca]')) { s.reports = []; s.unread = 0; persist(); UI.closeModal(); UI.refreshSheet(); CH.Home.refreshHud(true); } } }),
       },
     };
   }
@@ -7296,10 +7619,12 @@ CH.Screens = (function () {
         '<h4 class="group">Marches</h4><div class="b-row">' + icon('swords', 'big-ico') + '<div class="b-info"><b>Extra march slot</b><span class="muted">You have ' + S.marchSlots(s) + ' of ' + CH.MAX_MARCHES + ' marches (' + S.baseMarchSlots(s) + ' from your castle + ' + (s.extraMarch || 0) + ' bought). Permanent.</span></div>' +
           (S.marchSlots(s) >= CH.MAX_MARCHES ? '<span class="maxed">Max</span>' : '<button class="btn btn-gem" data-act="march"' + (s.res.gems >= CH.GEM_SHOP.marchSlot(s.extraMarch || 0) ? '' : ' disabled') + '>' + icon('gems') + CH.GEM_SHOP.marchSlot(s.extraMarch || 0) + '</button>') + '</div>' +
         '<h4 class="group">Skins</h4><div class="b-row">' + icon('shield', 'big-ico') + '<div class="b-info"><b>Castle & hero skins</b><span class="muted">Dunia, Surgawi, Neraka, Kegelapan</span></div><button class="btn btn-gold" data-act="skins">Open wardrobe</button></div>' +
+        '<h4 class="group">Forge materials</h4><div class="row">' + Object.entries(CH.GEM_SHOP.mats).map(([k, o]) => '<button class="btn btn-gem" data-act="mat" data-k="' + k + '"' + (s.res.gems >= o.gems ? '' : ' disabled') + '>+' + o.n + ' ' + CH.Meta.MATS[k] + ' (have ' + U.fmt((s.mats || {})[k] || 0) + ') · ' + icon('gems') + o.gems + '</button>').join('') + '</div>' +
         '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
       on: {
         res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
         redeem: () => UI.sheet('redeem'),
+        mat: b => { const r = CH.Meta.buyMat(s, b.dataset.k); if (!r.ok) return fail(r); CH.Audio.play('collect'); persist(); UI.toast('+' + r.n + ' ' + CH.Meta.MATS[b.dataset.k], 'good'); UI.refreshSheet(); },
         march: () => { const r = S.buyMarchSlot(s); if (!r.ok) return fail(r); CH.Audio.play('horn'); persist(); UI.toast('New march slot! You now have ' + S.marchSlots(s) + ' marches.', 'good'); UI.refreshSheet(); },
         skins: () => UI.sheet('skins'),
       },
@@ -7353,6 +7678,7 @@ CH.Screens = (function () {
         const d = B[b.type], why = S.upgradeBlocker(s, b), max = S.maxLevelFor(s, b.type);
         return '<div class="b-row"><canvas data-building="' + b.type + '" data-level="' + Math.max(1, b.level) + '"></canvas><div class="b-info"><b>' + d.name + '</b><span class="muted">Level ' + b.level + ' / ' + max + (b.job ? ' · ' + (b.job.kind === 'clear' ? 'clearing' : 'upgrading') + ' ' + U.time((b.job.ends - now) / 1000) : '') + '</span></div>' +
           (d.maxLevel > 1 && !b.job ? '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="up" data-id="' + b.id + '"' + (why === 'Maximum level' ? ' disabled' : '') + '>' + (why && why !== 'Not enough resources' ? why : 'Upgrade') + '</button>' : '') +
+          (b.job ? speedBtns({ kind: 'building', id: b.id }, S.speedUpCost(b), 'bspeed', b.id) : '') +
           '<button class="btn btn-quiet" data-act="show" data-id="' + b.id + '">Show</button></div>';
       }).join('') + '</div>';
     }).join('');
@@ -7364,6 +7690,8 @@ CH.Screens = (function () {
         '<h4 class="group">Walls</h4><p class="muted">' + walls.length + ' / ' + S.maxCount(s, 'wall') + ' placed · ' + Object.entries(wallLv).map(([l, n]) => n + ' at level ' + l).join(', ') + '</p>',
       on: {
         up: b => { const bb = S.byId(s, +b.dataset.id); if (bb) CH.Home.upgradeDialog(bb); },
+        ...speedActs,
+        bspeed: b => { const bb = S.byId(s, +b.dataset.id); if (!bb || !bb.job) return; const r = S.speedUp(s, bb.id); if (r && r.ok === false) return fail(r); CH.App.handleEvents(S.tick(s)); persist(); UI.refreshSheet(); },
         show: b => { const bb = S.byId(s, +b.dataset.id); UI.closeSheets(); if (bb) CH.Home.select(bb); },
       },
     };
@@ -7373,9 +7701,11 @@ CH.Screens = (function () {
   function lab() {
     const s = save(), ll = S.labLevel(s), now = Date.now(), j = s.rjob;
     const row = (kind, id, name, sprite, size, lvl, extra) => {
+      if (kind === 'tech' && j && j.kind === 'tech' && j.id === id) return '<div class="r-row active">' + icon('flask', 'big-ico') + '<div class="b-info"><b>' + name + ' → ' + j.to + '</b><div class="bar"><i style="width:' + Math.round((1 - (j.ends - now) / 1000 / j.total) * 100) + '%"></i></div><span class="muted">' + U.time((j.ends - now) / 1000) + ' left</span></div>' + speedBtns({ kind: 'research' }, Math.max(1, Math.ceil((j.ends - now) / 30000)), 'rush') + '</div>';
       if (kind === 'tech') { const why = S.researchBlocker(s, kind, id), c = S.researchCost(kind, id, lvl + 1);
         return '<div class="r-row">' + icon('flask', 'big-ico') + '<div class="b-info"><b>' + name + '</b><span class="muted">Level ' + lvl + ' / ' + CH.TECHS[id].max + ' · ' + extra + '</span></div>' + (why === 'Maximum level' ? '<span class="maxed">Max</span>' : '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="research" data-kind="tech" data-id="' + id + '"' + (why ? ' disabled' : '') + '>' + (why && why !== 'Not enough resources' ? why : UI.cost(c, s) + ' · ' + U.time(CH.RESEARCH.techTime(lvl + 1))) + '</button>') + '</div>'; }
       const why = S.researchBlocker(s, kind, id), c = S.researchCost(kind, id, lvl + 1);
+      if (j && j.kind === kind && j.id === id) return '<div class="r-row active">' + (sprite ? '<canvas data-unit="' + sprite + '" data-size="' + size + '"></canvas>' : icon(id, 'big-ico')) + '<div class="b-info"><b>' + name + ' → ' + j.to + '</b><div class="bar"><i style="width:' + Math.round((1 - (j.ends - now) / 1000 / j.total) * 100) + '%"></i></div><span class="muted">' + U.time((j.ends - now) / 1000) + ' left</span></div>' + speedBtns({ kind: 'research' }, Math.max(1, Math.ceil((j.ends - now) / 30000)), 'rush') + '</div>';
       return '<div class="r-row">' + (sprite ? '<canvas data-unit="' + sprite + '" data-size="' + size + '"></canvas>' : icon(id, 'big-ico')) + '<div class="b-info"><b>' + name + '</b><span class="muted">Level ' + lvl + ' / ' + CH.RESEARCH.maxLevel(Math.max(1, ll)) + (extra ? ' · ' + extra : '') + '</span></div>' +
         (why === 'Maximum level' ? '<span class="maxed">Max</span>' : '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="research" data-kind="' + kind + '" data-id="' + id + '"' + (why ? ' disabled title="' + why + '"' : '') + '>' + (why && why !== 'Not enough resources' ? why : UI.cost(c, s) + ' · ' + U.time(CH.RESEARCH.time(lvl + 1))) + '</button>') + '</div>';
     };
@@ -7390,6 +7720,7 @@ CH.Screens = (function () {
         '<h4 class="group">Spells</h4>' + CH.SPELL_ORDER.map(sp => row('spell', sp, CH.SPELLS[sp].name, null, 0, s.research.spells[sp], CH.SPELLS[sp].desc)).join(''),
       on: {
         research: b => { const r = S.research(s, b.dataset.kind, b.dataset.id); if (!r.ok) return fail(r); CH.Audio.play('magic'); persist(); UI.refreshSheet(); },
+        ...speedActs,
         rush: () => { const c = Math.max(1, Math.ceil((s.rjob.ends - Date.now()) / 30000)); if (s.res.gems < c) return fail({ reason: 'Not enough gems' }); s.res.gems -= c; s.rjob.ends = Date.now(); CH.App.handleEvents(S.tick(s)); persist(); UI.refreshSheet(); },
         ...jobActions,
       },
@@ -7601,7 +7932,7 @@ CH.Screens = (function () {
     const slots = ['weapon', 'armor', 'trinket'].map(sl => { const it = s.gear.find(g => g.id === H.gear[sl]); const t = it && M.TIERS[it.tier];
       return '<div class="panel gear-slot"><span class="kicker">' + sl + '</span>' + (it ? '<b style="color:' + t.color + '">' + it.name + '</b><span class="muted">' + t.name + ' · +' + t.might + '% might</span><button class="btn btn-quiet" data-act="off" data-sl="' + sl + '">Unequip</button>' : '<span class="muted">Empty</span>') + '</div>'; }).join('');
     const inv = s.gear.filter(g => !CH.HERO_ORDER.some(h => Object.values(s.heroes[h].gear || {}).includes(g.id))).sort((a, b) => b.tier - a.tier)
-      .map(g => '<button class="chip gear-item" data-act="eq" data-id="' + g.id + '" style="border-color:' + M.TIERS[g.tier].color + '">' + g.name + ' <i>' + g.slot + ' +' + M.TIERS[g.tier].might + '%</i></button>').join('') || '<span class="muted">No spare gear. Forge some below.</span>';
+      .map(g => '<span class="gear-pair"><button class="chip gear-item" data-act="eq" data-id="' + g.id + '" style="border-color:' + M.TIERS[g.tier].color + '">' + g.name + ' <i>' + g.slot + ' +' + M.TIERS[g.tier].might + '%</i></button><button class="btn btn-quiet" data-act="smelt" data-id="' + g.id + '" title="Smelt into Iron Ore">🔥 ' + Math.floor(M.TIERS[g.tier].cost.iron * 0.6) + ' ore</button></span>').join('') || '<span class="muted">No spare gear. Forge some below.</span>';
     const recipes = M.TIERS.map((t, i) => '<div class="b-row"><div class="b-info"><b style="color:' + t.color + '">' + t.name + '</b><span class="muted">+' + t.might + '% might · Hero Hall ' + t.hall + ' · ' +
       Object.entries(t.cost).map(([k, n]) => (k === 'gold' ? U.fmt(n) + ' gold' : n + ' ' + M.MATS[k])).join(', ') + '</span></div><div class="row">' + ['weapon', 'armor', 'trinket'].map(sl => '<button class="btn" data-act="craft" data-sl="' + sl + '" data-t="' + i + '">' + sl + '</button>').join('') + '</div></div>').join('');
     const tal = Object.entries(M.TALENTS).map(([k, t]) => '<div class="b-row"><div class="b-info"><b>' + t.name + ' ' + H.tal[k] + '/10</b><span class="muted">' + t.desc + '</span></div><button class="btn" data-act="tal" data-b="' + k + '"' + (tp > 0 && H.tal[k] < 10 ? '' : ' disabled') + '>+1</button></div>').join('');
@@ -7611,11 +7942,14 @@ CH.Screens = (function () {
         '<div class="panel army-sum"><span><b>' + d.name + '</b> level ' + H.level + (H.unlocked ? '' : ' (not recruited)') + '</span><span>Might: <b>+' + M.might(s, hero) + '%</b> attack & health for the army ' + d.name + ' leads</span><span>Materials: ' + Object.entries(M.MATS).map(([k, n]) => n + ' ' + U.fmt(s.mats[k] || 0)).join(' · ') + '</span></div>' +
         '<h4 class="group">Equipped</h4><div class="k-grid">' + slots + '</div><h4 class="group">Spare gear (tap to equip on ' + d.name + ')</h4><div class="chips">' + inv + '</div>' +
         '<h4 class="group">Talents · ' + tp + ' point(s) free</h4><div class="b-list">' + tal + '</div><button class="btn btn-quiet" data-act="reset">Reset talents (free)</button>' +
+        '<h4 class="group">Buy materials</h4><div class="row">' + Object.entries(CH.GEM_SHOP.mats).map(([k, o]) => '<button class="btn btn-gem" data-act="buymat" data-k="' + k + '">+' + o.n + ' ' + M.MATS[k] + ' · 💎' + o.gems + '</button>').join('') + '</div>' +
         '<h4 class="group">Forge</h4><p class="muted">Materials drop from monster camps, ruins, the Elder Dragon, invasions, the arena, daily quests and the season pass.</p><div class="b-list">' + recipes + '</div>',
       on: {
         hero: b => UI.sheet('forge', b.dataset.h, false),
         craft: b => { const r = M.craft(s, b.dataset.sl, +b.dataset.t); if (!r.ok) return fail(r); M.equip(s, hero, r.item.id); CH.Audio.play('upgrade'); persist(); UI.toast('Forged ' + r.item.name + ' and equipped it on ' + d.name, 'good'); UI.refreshSheet(); },
         eq: b => { M.equip(s, hero, b.dataset.id); persist(); UI.refreshSheet(); },
+        smelt: b => { const r = M.smelt(s, b.dataset.id); if (!r.ok) return fail(r); CH.Audio.play('cannon'); persist(); UI.toast('Smelted into ' + r.got.iron + ' Iron Ore' + (r.got.crystal ? ' and ' + r.got.crystal + ' Arcane Crystal' : ''), 'good'); UI.refreshSheet(); },
+        buymat: b => { const r = M.buyMat(s, b.dataset.k); if (!r.ok) return fail(r); persist(); UI.toast('+' + r.n + ' ' + M.MATS[b.dataset.k], 'good'); UI.refreshSheet(); },
         off: b => { M.unequip(s, hero, b.dataset.sl); persist(); UI.refreshSheet(); },
         tal: b => { if (M.addTalent(s, hero, b.dataset.b)) { persist(); UI.refreshSheet(); } },
         reset: () => { M.resetTalents(s, hero); persist(); UI.refreshSheet(); },
@@ -7623,7 +7957,44 @@ CH.Screens = (function () {
     };
   }
 
-  Object.assign(CH.Screens, { daily, achievements, season, arena, forge });
+  function realms(id) {
+    const s = save(), now = Date.now(), Rm = CH.Realm, rs = Rm.ensure(s.world);
+    id = id || realms.id || CH.REALM_ORDER.find(x => Rm.window(x, now).active) || 'alien'; realms.id = id;
+    const R = CH.REALMS[id], win = Rm.window(id, now), r = rs[id], ru = Rm.ruler(s, id, now);
+    const heroes = CH.HERO_ORDER.filter(h => s.heroes[h].unlocked); realms.hero = realms.hero !== undefined ? realms.hero : heroes[0];
+    const stage = win.active && r.win === win.start ? r.stage : 0;
+    const ladder = Rm.STAGES.map((st, i) => '<div class="rank-row' + (i === stage && win.active ? ' me' : '') + '"><span class="rk">' + (win.active && i < stage ? '✓' : i + 1) + '</span><b>' + (st.citadel ? '🏰 ' : '') + st.name + '</b><span class="muted">~' + U.fmt(Object.entries(Rm.stageArmy(s, id, i)).reduce((a, [u, n]) => a + n, 0)) + ' foes</span><span class="rv">' + UI.reward({ gems: Rm.stageReward(i).gems }) + '</span></div>').join('');
+    const emperor = CH.REALM_ORDER.map(x => { const q = Rm.ruler(s, x, now); return CH.REALMS[x].icon + ' ' + CH.REALMS[x].name + ': ' + (q ? (q.key === 'player' ? '<b class="good">you</b>' : esc(CH.Throne.keyName(s, q.key))) : 'nobody'); }).join(' · ') + ' · 👑 Eldoria: ' + (CH.Throne.kingName(s) ? (CH.Throne.isPlayerKing(s) ? '<b class="good">you</b>' : esc(CH.Throne.kingName(s))) : 'nobody');
+    return {
+      title: 'Realm Conquest',
+      html: '<div class="tabs">' + CH.REALM_ORDER.map(x => '<button class="tab' + (x === id ? ' on' : '') + '" data-act="realm" data-id="' + x + '">' + CH.REALMS[x].icon + ' ' + CH.REALMS[x].name + (Rm.window(x, now).active ? ' ●' : '') + '</button>').join('') + '</div>' +
+        '<div class="panel ev-now realm-' + id + '"><span class="kicker">' + (win.active ? 'PORTAL OPEN · closes in ' + U.time((win.end - now) / 1000) : 'Portal opens ' + Rm.label(id) + ' · in ' + U.time(((win.start > now ? win.start : win.next) - now) / 1000)) + '</span><h3>' + R.icon + ' ' + R.full + '</h3>' +
+        '<p>Ruler this week: <b>' + (ru ? esc(CH.Throne.keyName(s, ru.key)) : 'nobody') + '</b>. Ruler\'s title «' + R.title + '»: ' + CH.Throne.fmtBuffs(R.buffs) + '.</p>' +
+        '<p class="muted">Fight through three gates and storm the citadel. Your whole home army fights; <b>the fallen return home after 5 minutes</b>. Lose and your army regroups for 3 minutes.</p></div>' +
+        (win.active ? (stage >= 4 ? '<p class="good">👑 You rule ' + R.name + ' this week!</p>' : r.cd > now ? '<p class="warn">Regrouping: ' + U.time((r.cd - now) / 1000) + '</p>' :
+          '<div class="panel army-sum"><span>Army ' + U.fmt(S.armySize(s)) + ' · power ' + U.fmt(CH.World.armyPower(s.army)) + '</span><span>Hero: ' + ['', ...heroes].map(h => '<button class="tab' + ((realms.hero || '') === h ? ' on' : '') + '" data-act="hero" data-h="' + h + '">' + (h ? CH.HEROES[h].name : 'None') + '</button>').join('') + '</span></div><button class="btn btn-gold btn-lg" data-act="fight">⚔ Enter the portal: ' + Rm.STAGES[stage].name + '</button>') : '') +
+        '<div class="ranks">' + ladder + '</div>' +
+        '<h4 class="group">🌌 Emperor of the Four Worlds</h4><p class="muted">Be King of Eldoria and ruler of all three realms at the same time for the title «Emperor of the Four Worlds» and 2,000 gems.</p><p>' + emperor + '</p>',
+      on: {
+        realm: b => UI.sheet('realms', b.dataset.id, false),
+        hero: b => { realms.hero = b.dataset.h || null; UI.refreshSheet(); },
+        fight: () => { const r = Rm.fight(s, id, realms.hero); if (!r.ok) return fail(r); persist(); CH.Audio.play(r.won ? 'victory' : 'defeat'); UI.refreshSheet(); CH.WorldUI.showReport(r.report); },
+      },
+    };
+  }
+
+  /** Everything coming up, with times: rotating world events, Throne War and realm portals. */
+  function schedule(s, now = Date.now(), n = 8) {
+    const w = s.world, out = [], cyc = 40 * 60000, len = 30 * 60000;
+    const e = CH.World.eventAt(w, now);
+    for (let i = e.active ? 1 : 0, k = 0; k < n; i++, k++) { const idx = e.idx + i, ev = CH.EVENTS[((idx % CH.EVENTS.length) + CH.EVENTS.length) % CH.EVENTS.length]; const st = w.epoch + idx * cyc; if (st > now) out.push({ t: st, end: st + len, name: ev.name, desc: ev.desc }); }
+    const tw = CH.Throne.warWindow(now); out.push({ t: tw.start > now ? tw.start : tw.next, name: '👑 Throne War', desc: 'Seize the Aurelion Citadel (' + CH.Throne.warLabel() + ')' });
+    for (const id of CH.REALM_ORDER) { const rw = CH.Realm.window(id, now); out.push({ t: rw.start > now ? rw.start : rw.next, name: CH.REALMS[id].icon + ' Portal to ' + CH.REALMS[id].name, desc: 'Realm Conquest (' + CH.Realm.label(id) + ')' }); }
+    return out.sort((a, b) => a.t - b.t);
+  }
+
+  Object.assign(CH.Screens, { daily, achievements, season, arena, forge, realms });
+  CH.MetaUI = { schedule };
 })();
 
 </script>
@@ -7931,6 +8302,7 @@ CH.WorldUI = (function () {
     consider('home', { x: w.px, y: w.py });
     if (w.throne && Math.hypot(w.throne.x + 0.5 - x, w.throne.y + 0.5 - y) < 2.6) { best = { type: 'throne', o: w.throne }; bd = 0.5; }
     if (w.inv) for (const sh of w.inv.ships) if (Math.hypot(sh.x + 0.5 - x, sh.y + 0.5 - y) < 1.8) { best = { type: 'ship', o: sh }; bd = 0.4; }
+    { const id = CH.REALM_ORDER.find(r => CH.Realm.window(r, Date.now()).active); if (id && w.throne && Math.hypot(w.throne.x + 6.5 - x, w.throne.y - 4.5 - y) < 1.8) return { type: 'portal', id }; }
     for (const k of w.kingdoms) consider('kingdom', k);
     if (st.filters.mon) { for (const c of w.camps) if (!c.dead) consider('camp', c); for (const r of w.ruins) if (!r.dead) consider('ruin', r); if (w.dragon) consider('dragon', w.dragon); }
     if (st.filters.res) for (const t of w.tiles) consider('tile', t);
@@ -7942,6 +8314,7 @@ CH.WorldUI = (function () {
   function onTap(x, y) {
     if (st.teleport) { const tx = Math.floor(x), ty = Math.floor(y); st.teleport = { x: tx, y: ty }; teleportPanel(); return; }
     const hit = findAt(x, y);
+    if (hit && hit.type === 'portal') { CH.Audio.play('magic'); UI.sheet('realms', hit.id); return; }
     if (hit) select(hit); else { CH.Audio.play('click'); select({ type: 'empty', o: { x: Math.floor(x), y: Math.floor(y) } }); }
   }
   function selectAt(x, y) { const h = findAt(x + 0.5, y + 0.5); if (h) select(h); }
@@ -7969,6 +8342,7 @@ CH.WorldUI = (function () {
         '</dl>' + (scout ? '<p class="muted">Last scout ' + U.time((now - scout.t) / 1000) + ' ago: about ' + U.fmt(scout.troopsTotal) + ' troops, loot ≈ ' + U.fmt(Object.values(scout.loot).reduce((a, n) => a + n, 0)) + '.</p>' : '') +
         (o.hist.length ? '<p class="muted">Recent: ' + o.hist.slice(0, 2).map(x => esc(x.text)).join(' · ') + '</p>' : '');
       const same = s.faction != null && s.faction === o.f;
+      { const tid = CH.Throne.titleOfKey(s, o.id); if (tid) { const Tt = CH.THRONE.titles[tid]; body = '<p class="' + (Tt.good ? 'good' : 'warn') + '">' + (Tt.good ? '🎖 ' : '🤡 ') + Tt.name + ': ' + CH.Throne.fmtBuffs(Tt.buffs) + '</p>' + body; } }
       if (o.nemesis) body = '<p class="danger-title">☠ Your NEMESIS — it has sworn vengeance and will hunt you. Defeat it for 300 gems and rare materials.</p>' + body;
       if (o.truceUntil > now) body = '<p class="good">🕊 Truce with you for ' + U.time((o.truceUntil - now) / 1000) + '</p>' + body;
       else if (o.friendUntil > now) body = '<p class="good">Friendly towards you for ' + U.time((o.friendUntil - now) / 1000) + '</p>' + body;
@@ -8020,6 +8394,8 @@ CH.WorldUI = (function () {
     } else if (h.type === 'home') {
       head = '<h3>★ ' + esc(s.player.name) + '</h3><p class="muted">Your kingdom · power ' + U.fmt(S.power(s)) + '</p>';
       body = '<dl class="stats"><div><dt>Protection</dt><dd>' + (S.beginner(s) ? 'Beginner protection' : s.shieldUntil > now ? '🛡 ' + U.time((s.shieldUntil - now) / 1000) : 'None') + '</dd></div><div><dt>March slots</dt><dd>' + S.marchSlots(s) + '</dd></div></dl>';
+      { const b0 = CH.Throne.buffs(s), any = Object.values(b0).some(v => v); const tid = CH.Throne.titleOfKey(s, 'player');
+        if (any || tid) body += '<p class="' + (Object.values(b0).reduce((a, v) => a + v, 0) >= 0 ? 'good' : 'warn') + '">' + (CH.Throne.isPlayerKing(s) ? '👑 King · ' : '') + (tid ? (CH.THRONE.titles[tid].good ? '🎖 ' : '🤡 ') + CH.THRONE.titles[tid].name + ' · ' : '') + CH.Throne.fmtBuffs(Object.fromEntries(Object.entries(b0).filter(([, v]) => v))) + '</p>'; }
       acts = '<button class="btn btn-gold" data-p="enter">Enter kingdom</button><button class="btn" data-p="tele-random">Random teleport (' + (s.items.teleRandom || 0) + ')</button><button class="btn" data-p="tele-pick">Advanced teleport (' + (s.items.teleAdvanced || 0) + ')</button>';
     } else if (h.type === 'march') {
       const m = o, tgt = describeTarget(m);
@@ -8172,8 +8548,12 @@ CH.WorldUI = (function () {
       return '<div class="b-row"><div class="b-info"><b>' + d.name + '</b><span class="muted">' + UI.reward(d.reward) + '</span></div>' +
         (to ? '<span class="good">→ ' + esc(to) + '</span>' : '<select data-pz="' + p.id + '"><option value="">Give to…</option><option value="player">Keep for yourself</option>' + cands.map(k => '<option value="' + k.id + '">' + esc(k.name) + (k.f === s.faction ? ' (ally)' : '') + '</option>').join('') + '</select>') + '</div>';
     }).join('');
-    UI.modal('<h3>🎁 Royal Court</h3><p class="muted">As ' + TH.title + ' you hand out the Citadel\'s treasure. You may keep one chest of each kind. Kingdoms you reward stay loyal and won\'t attack you during your reign.</p><div class="b-list">' + rows + '</div>', { cls: 'wide' });
+    const tSel = id => '<select data-title="' + id + '"><option value="">— nobody —</option>' + cands.map(k => '<option value="' + k.id + '"' + ((th.titles || {})[id] === k.id ? ' selected' : '') + '>' + esc(k.name) + (k.f === s.faction ? ' (ally)' : '') + '</option>').join('') + '</select>';
+    const titleRows = Object.entries(TH.titles).map(([id, t]) => '<div class="b-row"><div class="b-info"><b>' + (t.good ? '🎖 ' : '🤡 ') + t.name + '</b><span class="muted">' + CH.Throne.fmtBuffs(t.buffs) + '</span></div>' + tSel(id) + '</div>').join('');
+    UI.modal('<h3>👑 Your royal buffs</h3><p class="good">' + CH.Throne.fmtBuffs(TH.kingBuffs) + '</p><h3>🎖 Titles</h3><p class="muted">Grant honours to friends and villain titles to enemies. Each title has one holder; each kingdom one title.</p><div class="b-list">' + titleRows + '</div><h3>🎁 Royal Court</h3><p class="muted">As ' + TH.title + ' you hand out the Citadel\'s treasure. You may keep one chest of each kind. Kingdoms you reward stay loyal and won\'t attack you during your reign.</p><div class="b-list">' + rows + '</div>', { cls: 'wide' });
     $('modal').onchange = e => {
+      const ts = e.target.closest('[data-title]');
+      if (ts) { const r = CH.Throne.grantTitle(s, ts.dataset.title, ts.value || null); if (!r.ok) return fail(r); CH.Audio.play('heroDeploy'); CH.App.persist(); UI.closeModal(); royalCourt(); return; }
       const sel = e.target.closest('[data-pz]'); if (!sel || !sel.value) return;
       const r = CH.Throne.distribute(s, sel.dataset.pz, sel.value);
       if (!r.ok) { fail(r); sel.value = ''; return; }
@@ -8188,6 +8568,11 @@ CH.WorldUI = (function () {
     const now = Date.now(), war = w.throne.war;
     if (war && !war.ended && now < war.end) {
       const txt = '👑 Throne War · ' + U.time((war.end - now) / 1000) + ' left · held by ' + CH.Throne.keyName(s, war.holder);
+      if (el.textContent !== txt) el.textContent = txt;
+      el.classList.remove('hidden');
+    } else if (CH.REALM_ORDER.some(id => CH.Realm.window(id, now).active)) {
+      const id = CH.REALM_ORDER.find(x => CH.Realm.window(x, now).active), R = CH.REALMS[id], rw = CH.Realm.window(id, now);
+      const txt = R.icon + ' Portal to ' + R.name + ' is open · ' + U.time((rw.end - now) / 1000) + ' left · tap to enter';
       if (el.textContent !== txt) el.textContent = txt;
       el.classList.remove('hidden');
     } else if (w.inv && !w.inv.done) {
@@ -8211,7 +8596,9 @@ CH.WorldUI = (function () {
       (st.drawer ? '<div class="m-drawer">' + (CH.Throne.garrisonOf(s) ? '<div class="m-item"><span>👑 Citadel garrison · ' + U.fmt(Object.values(CH.Throne.garrisonOf(s)).reduce((a, n) => a + n, 0)) + ' troops</span><button class="btn btn-quiet" data-b="go" data-x="' + W().throne.x + '" data-y="' + W().throne.y + '">View</button><button class="btn btn-quiet" data-b="withdraw">Withdraw</button></div>' : '') + (mine.concat(inc).map(m => {
         const left = Math.max(0, (m.t1 - now) / 1000), hostile = m.owner !== 'player';
         return '<div class="m-item' + (hostile ? ' hostile' : '') + '"><span>' + (hostile ? '⚠ ' + esc(W().kingdoms.find(k => k.id === m.owner).name) + ' → you' : m.kind + ' → ' + esc(describeTarget(m))) + '</span><b>' + U.time(left) + '</b>' +
-          '<button class="btn btn-quiet" data-b="go" data-x="' + m.tx + '" data-y="' + m.ty + '">View</button>' + (!hostile && m.kind !== 'return' ? '<button class="btn btn-quiet" data-b="recall" data-id="' + m.id + '">Recall</button>' : '') + '</div>';
+          '<button class="btn btn-quiet" data-b="go" data-x="' + m.tx + '" data-y="' + m.ty + '">View</button>' +
+          (!hostile && ['attack', 'scout', 'gather', 'return'].includes(m.kind) ? '<button class="btn btn-quiet" data-b="boost" data-id="' + m.id + '" title="March Boost: half the time">⚡' + (s.items.marchBoost || 0) + '</button><button class="btn btn-quiet" data-b="gem" data-id="' + m.id + '" title="Arrive now">💎' + CH.World.marchGemCost(m, now) + '</button>' : '') +
+          (!hostile && m.kind !== 'return' ? '<button class="btn btn-quiet" data-b="recall" data-id="' + m.id + '">Recall</button>' : '') + '</div>';
       }).join('') || '<p class="muted">No marches.</p>') + '</div>' : '');
   }
   function onBar(e) {
@@ -8220,6 +8607,7 @@ CH.WorldUI = (function () {
     if (b.dataset.b === 'toggle') st.drawer = !st.drawer;
     else if (b.dataset.b === 'go') CH.App.wview.center(+b.dataset.x, +b.dataset.y);
     else if (b.dataset.b === 'withdraw') { withdrawGarrison(); return; }
+    else if (b.dataset.b === 'boost' || b.dataset.b === 'gem') { const r = CH.World.speedMarch(save(), b.dataset.id, b.dataset.b === 'boost' ? 'item' : 'gems'); if (!r.ok) return fail(r); CH.Audio.play('horn'); CH.App.persist(); }
     else if (b.dataset.b === 'recall') { if (CH.World.recall(save(), b.dataset.id)) { CH.App.persist(); UI.toast('March recalled', 'good'); } }
     renderBar(true);
   }
@@ -8251,7 +8639,7 @@ CH.WorldUI = (function () {
         '<div class="rep-sides">' + sideTable(rep.atk, 'Attacker') + sideTable(rep.def, 'Defender') + '</div>';
       if (rep.loot && Object.values(rep.loot).some(n => n > 0)) html += '<p class="muted">' + (rep.you === 'def' ? 'Resources stolen from you:' : 'Loot carried home:') + '</p><div class="chips">' + UI.reward(rep.loot) + '</div>';
       if (rep.reward && Object.values(rep.reward).some(n => n > 0)) html += '<p class="muted">Rewards:</p><div class="chips">' + UI.reward(rep.reward) + Object.keys(rep.items || {}).map(i => '<span class="chip">' + CH.ITEMS[i].name + '</span>').join('') + '</div>';
-      if (rep.revive) html += '<p class="good">Throne War: fallen troops on both sides return after 5 minutes.</p>';
+      if (rep.revive) html += '<p class="good">' + (rep.kind === 'realm' ? 'Realm Conquest: your fallen troops return home after 5 minutes.' : 'Throne War: fallen troops on both sides return after 5 minutes.') + '</p>';
       if (rep.casualties) html += '<p class="muted">Your casualties: ' + U.fmt(rep.casualties.wounded) + ' wounded (infirmary), ' + U.fmt(rep.casualties.dead) + ' dead.</p>';
       if (rep.dmg) html += '<p class="muted">Damage dealt: attackers ' + U.fmt(rep.dmg.atk) + ' · defenders ' + U.fmt(rep.dmg.def) + '</p>';
     }
@@ -8391,7 +8779,7 @@ CH.App = (function () {
       else if (e.kind === 'healed') UI.toast(U.fmt(e.n) + ' troops recovered in the infirmary', 'good');
       else if (e.kind === 'starving') UI.toast('Your granaries are empty! ' + U.fmt(e.lost) + ' troops deserted. Build farms or train fewer troops.', 'bad');
       if (e.kind === 'built') { UI.toast(CH.BUILDINGS[e.type].name + (e.level > 1 ? ' upgraded to level ' + e.level : ' finished'), 'good'); CH.Audio.play('upgrade'); }
-      else if (e.kind === 'research') UI.toast((e.rkind === 'troop' ? CH.TROOPS[e.id].name : CH.SPELLS[e.id].name) + ' research reached level ' + e.level, 'good');
+      else if (e.kind === 'research') UI.toast((e.rkind === 'troop' ? CH.TROOPS[e.id].name : e.rkind === 'tech' ? CH.TECHS[e.id].name : CH.SPELLS[e.id].name) + ' research reached level ' + e.level, 'good');
       else if (e.kind === 'cleared') UI.toast('Cleared! ' + Object.entries(e.got).filter(([k]) => k !== 'levels').map(([k, v]) => '+' + v + ' ' + k).join(', ') + (e.gems ? ' and found ' + e.gems + ' gems!' : ''), 'good');
       if (e.levels) for (const l of e.levels) levelUp(l);
     }

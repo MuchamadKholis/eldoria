@@ -402,6 +402,18 @@
     }
 
     updateAttacker(u, dt) {
+      // 0) Wipe-out battles (camps, Citadel, arena, realms): hunt enemy troops wherever they are.
+      const hunt = this.mode === 'siege' && this.cfgSiege.objective === 'eliminate';
+      if (hunt || u.huntOnly) {
+        if (u.tu && u.tu.dead) u.tu = null;
+        if (!u.tu) u.tu = this.nearestUnit(u, 'def', 1e9);
+        if (u.tu) {
+          if (Math.hypot(u.tu.x - u.x, u.tu.y - u.y) <= u.range + u.tu.size + 4) this.attack(u, u.tu, false);
+          else if (u.flying || !this.blockedLine(u, u.tu)) this.moveToward(u, u.tu.x, u.tu.y, dt);
+          else { u.huntOnly = false; u.tu = null; } // a wall is in the way: deal with buildings first
+          if (u.tu) return;
+        }
+      }
       // 1) Fight defenders who get close (except siege units that only want buildings).
       if (u.def.target !== 'defense' && u.def.target !== 'walls') {
         if (u.tu && (u.tu.dead || Math.hypot(u.tu.x - u.x, u.tu.y - u.y) > u.range + 3 * T)) u.tu = null;
@@ -422,7 +434,11 @@
         return;
       }
       // 3) Buildings.
-      if (!u.tb || u.tb.dead) { u.tb = this.chooseBuilding(u); u.path = null; u.pi = 0; if (!u.tb) return; }
+      if (!u.tb || u.tb.dead) {
+        u.tb = this.chooseBuilding(u); u.path = null; u.pi = 0;
+        // Nothing left to knock down: never stand idle, go after the nearest enemy troop anywhere.
+        if (!u.tb) { u.tu = this.nearestUnit(u, 'def', 1e9); if (u.tu) { u.huntOnly = true; if (Math.hypot(u.tu.x - u.x, u.tu.y - u.y) <= u.range + u.tu.size + 4) this.attack(u, u.tu, false); else this.moveToward(u, u.tu.x, u.tu.y, dt); } return; }
+      }
       const tb = u.tb;
       if (this.distToB(u.x, u.y, tb) <= u.range + 0.35 * T) { this.attack(u, tb, true); return; }
       if (u.flying) { this.moveToward(u, tb.cx, tb.cy, dt); return; }
@@ -437,6 +453,12 @@
       } else this.moveToward(u, tb.cx, tb.cy, dt);
     }
 
+    /** True if a solid building sits on the straight line between two units. */
+    blockedLine(a, b) {
+      const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (T * 0.5));
+      for (let i = 1; i < n; i++) { const x = a.x + (b.x - a.x) * i / n, y = a.y + (b.y - a.y) * i / n; const ob = this.bAt(Math.floor(y / T) * W + Math.floor(x / T)); if (ob && !ob.dead && (ob.def.cat === 'wall' || ob.def.cat === 'gate')) return true; }
+      return false;
+    }
     updateDefender(u, dt) {
       const leash = u.leash || (u.hero ? 6 : 4.5) * T;
       if (u.tu && (u.tu.dead || Math.hypot(u.tu.x - u.ax, u.tu.y - u.ay) > leash + 2 * T)) u.tu = null;
@@ -1003,8 +1025,8 @@
     }
     /** Spawn points per formation; dir is the march direction (attacker → defender). */
     formationPlan(cfg) {
-      const [w, h] = C.AREA[Math.min(8, cfg.cl) - 1];
-      const x0 = Math.floor((W - w) / 2), y0 = Math.floor((H - h) / 2);
+      const ar = cfg.area || (() => { const [w0, h0] = C.AREA[Math.min(8, cfg.cl) - 1]; return { x: Math.floor((W - w0) / 2), y: Math.floor((H - h0) / 2), w: w0, h: h0 }; })();
+      const w = ar.w, h = ar.h, x0 = ar.x, y0 = ar.y;
       const mid = { x: W / 2, y: H / 2 };
       const edgeOf = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'W' : 'E') : (dy > 0 ? 'N' : 'S'));
       const main = edgeOf(cfg.dir.x, cfg.dir.y);

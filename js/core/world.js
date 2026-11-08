@@ -69,7 +69,8 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   /* ---------------- AI helpers ---------------- */
-  const aiProd = (k) => 45 * Math.pow(1.38, k.cl - 1) * CH.PERSONALITIES[k.p].eco;
+  const aiBuff = (k, b) => (CH.Throne && k.__s ? CH.Throne.buffs(k.__s, k.id)[b] : 0);
+  const aiProd = (k) => 45 * Math.pow(1.38, k.cl - 1) * CH.PERSONALITIES[k.p].eco * (1 + aiBuff(k, 'prod'));
   const aiCap = cl => 8000 * Math.pow(1.7, cl - 1);
   const aiMaxArmy = k => Math.round(150 * Math.pow(1.75, k.cl - 1) * CH.PERSONALITIES[k.p].army);
   const aiCastleCost = cl => 5000 * Math.pow(1.75, cl - 1);
@@ -185,7 +186,7 @@
       k.last = T;
     }
   }
-  const aiDefPower = k => armyPower(k.tr) * (1 + 0.08 * k.cl) * (1 + (CH.PERSONALITIES[k.p].fort || 0)) + 400 * Math.pow(1.6, k.cl);
+  const aiDefPower = k => armyPower(k.tr) * (1 + 0.08 * k.cl) * (1 + (CH.PERSONALITIES[k.p].fort || 0)) * (1 + aiBuff(k, 'def')) + 400 * Math.pow(1.6, k.cl);
   function playerDefPower(s) {
     let p = armyPower(s.army) * (1 + 0.08 * CH.State.castleLevel(s));
     for (const b of s.buildings) if (CH.BUILDINGS[b.type].atk) p += b.level * 120 * CH.Siege.fortScale(CH.State.castleLevel(s)) * 0.05;
@@ -211,6 +212,7 @@
     if (s.faction === 2) m += 0.1;
     if (heroId === 'thorne') m += 0.1;
     if (CH.Meta) m += CH.Meta.marchBonus(s, heroId);
+    if (CH.Throne && s.world) m += CH.Throne.buffs(s).march;
     return m;
   }
   function marchSeconds(from, to, army, mult = 1, kind) {
@@ -483,7 +485,7 @@
     const cfg = CH.Siege.build({
       attacker: { name: owner.name, army: m.army, hero: { id: m.hero, level: m.heroLevel }, research: {}, atkBonus: 0.03 * owner.cl },
       defender: { name: s.player.name, kind: 'player', cl, homeTerrain: true, layout: s.buildings.filter(b => b.level > 0).map(b => ({ type: b.type, level: b.level, tx: b.tx, ty: b.ty })),
-        army: garrison, heroes: homeHeroes, hero: defHero, research: s.research.troops, fortBonus },
+        army: garrison, heroes: homeHeroes, hero: defHero, research: s.research.troops, fortBonus, defBonus: CH.Throne.buffs(s).def },
       formation: U.pick(['surround', 'spearhead', 'pincer'], U.rng(T % 1e9)), dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
     cfg.castleSkin = s.equipped ? s.equipped.castle : null;
@@ -559,7 +561,7 @@
     const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero), might: CH.Meta.might(s, m.hero) } : null;
     const own = m.army, mergedArmy = { ...m.army };
     for (const x of m.allies || []) for (const t in x.army) mergedArmy[t] = (mergedArmy[t] || 0) + x.army[t];
-    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) };
+    const attacker = { name: s.player.name + (m.allies && m.allies.length ? ' (rally of ' + (m.allies.length + 1) + ')' : ''), army: mergedArmy, hero, research: s.research.troops, atkBonus: 0.03 * (s.research.techs.warfare || 0) + (s.faction === 3 ? 0.06 : 0) + CH.Throne.buffs(s).atk };
     const dir = { x: m.tx - m.fx, y: m.ty - m.fy }, seed = (T % 1e9) | 0;
     let cfg, defender, target;
     if (tgt.type === 'kingdom') {
@@ -715,12 +717,14 @@
       ev.push({ kind: 'event', ev: e.ev });
     }
     CH.Invasion.update(s, T, ev);
+    if (CH.Realm) CH.Realm.update(s, T, ev);
     if (w.dragon && T > w.dragon.until) w.dragon = null;
   }
 
   function tick(s, now = Date.now()) {
     const w = W(s), ev = [];
     if (!w) return ev;
+    for (const k of w.kingdoms) if (k.__s !== s) Object.defineProperty(k, '__s', { value: s, enumerable: false, writable: true, configurable: true }); // lets AI read its royal buffs
     let t = w.lastTick;
     if (now - t > C.OFFLINE_CAP_H * 3600e3) {
       // The world "rests" beyond the cap: shift timers so nothing explodes.
@@ -809,6 +813,23 @@
     w.marches.push({ ...m, id: 'm' + w.nextId++, kind: 'return', fx: cx, fy: cy, tx: m.fx, ty: m.fy, t0: now, t1: now + Math.max(5000, now - m.t0), cargo: {}, target: { type: 'home' } });
     return true;
   }
+  /** Speed up one of your marches: a March Boost halves the time left; gems arrive instantly. */
+  const marchGemCost = (m, now) => Math.max(2, Math.ceil((m.t1 - now) / 1000 / 20));
+  function speedMarch(s, id, how, now = Date.now()) {
+    const m = W(s).marches.find(x => x.id === id && x.owner === 'player');
+    if (!m || !['attack', 'scout', 'gather', 'return'].includes(m.kind) || m.t1 <= now) return { ok: false, reason: 'Nothing to speed up' };
+    const left = m.t1 - now;
+    if (how === 'item') {
+      if (!(s.items.marchBoost > 0)) return { ok: false, reason: 'You have no March Boost (Gem Shop)' };
+      s.items.marchBoost--;
+      const cut = left / 2; m.t0 -= cut; m.t1 -= cut; // keep the march visually where it is, move faster
+    } else {
+      const c = marchGemCost(m, now);
+      if (s.res.gems < c) return { ok: false, reason: 'Not enough gems (' + c + ')' };
+      s.res.gems -= c; m.t0 -= left; m.t1 = now;
+    }
+    return { ok: true };
+  }
   function occupiedNear(w, x, y, r = 2) {
     if (w.throne && Math.hypot(w.throne.x - x, w.throne.y - y) < 6) return true;
     if (Math.abs(w.px - x) <= r && Math.abs(w.py - y) <= r) return true;
@@ -884,7 +905,7 @@
 
   CH.World = {
     create, ensure, tick, validate, biomeAt, eventAt, evOn, accrue, aiDefPower, playerDefPower, armyPower, armyCount, byClass, loadOf, lootable,
-    sendMarch, recall, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
+    sendMarch, recall, speedMarch, marchGemCost, teleport, canTeleport, requestHelp, joinFaction, leaveFaction, incoming, power, playerMarches, busyHeroes, marchSeconds, marchSpeedMult,
     territoryBonus, onShield, findAny, campMonsters, clash, addReport, campRewards, dist, N, heroXp, PKEYS,
   };
 })();

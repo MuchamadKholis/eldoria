@@ -24,7 +24,7 @@ with sync_playwright() as p:
     check('HUD shows food and the World button', pg.is_visible('#hud-food') and pg.is_visible('[data-dock=world]'))
     pg.click('[data-dock=build]'); pg.wait_for_timeout(300)
     pg.click('[data-act=place][data-type=stoneQuarry]'); pg.wait_for_timeout(200)
-    spot = pg.evaluate("(()=>{const s=CH.App.save,a=CH.State.area(s);for(let y=a.y;y<a.y+a.h-1;y++)for(let x=a.x;x<a.x+a.w-1;x++)if(CH.State.tilesFree(s,x,y,2))return {x,y}})()")
+    spot = pg.evaluate("(()=>{const s=CH.App.save,c=CH.State.castle(s),a=CH.State.area(s);let best=null,bd=1e9;for(let y=a.y;y<a.y+a.h-1;y++)for(let x=a.x;x<a.x+a.w-1;x++)if(CH.State.tilesFree(s,x,y,2)){const d=Math.hypot(x-c.tx,y-c.ty);if(d<bd){bd=d;best={x,y}}}return best})()")
     pt = pg.evaluate("([x,y])=>{const v=CH.App.view,r=v.canvas.getBoundingClientRect(),p=v.toScreen((x+1)*32,(y+1)*32);return {x:r.left+p.x,y:r.top+p.y}}", [spot['x'], spot['y']])
     pg.mouse.move(pt['x'], pt['y']); pg.mouse.click(pt['x'], pt['y']); pg.wait_for_timeout(300)
     check('building placed with a builder timer', pg.evaluate("!!CH.App.save.buildings.find(b=>b.type==='stoneQuarry'&&b.job)"))

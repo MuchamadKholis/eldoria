@@ -46,12 +46,12 @@ CH.Invasion = (function () {
   function launchWave(s, T, ev) {
     const w = W(s), inv = w.inv, kind = inv.id;
     inv.wave++;
-    const f = 0.4 + 0.08 * inv.wave;
+    const f = 0.75 + 0.15 * inv.wave; // waves start strong and keep growing
     const send = (x, y, target, power, boss) => {
       const sh = nearestShip(w, x, y), secs = Math.max(45, Math.hypot(sh.x - x, sh.y - y) * 3.5);
       w.marches.push({ id: 'm' + w.nextId++, owner: 'invader', kind: 'invade', inv: kind, fx: sh.x, fy: sh.y, tx: x, ty: y, t0: T, t1: T + secs * 1000, army: horde(kind, power, boss), target, cargo: {} });
     };
-    send(w.px, w.py, { type: 'player' }, CH.World.playerDefPower(s) * f, inv.wave >= 3);
+    send(w.px, w.py, { type: 'player' }, CH.World.playerDefPower(s) * f, inv.wave >= 2);
     for (const k of w.kingdoms) send(k.x, k.y, { type: 'kingdom', id: k.id }, CH.World.aiDefPower(k) * f, false);
     ev.push({ kind: 'invWave', wave: inv.wave });
   }
@@ -71,7 +71,7 @@ CH.Invasion = (function () {
     if (m.target.type === 'kingdom') {
       const k = w.kingdoms.find(x => x.id === m.target.id); if (!k) return;
       const att = Object.keys(m.army).reduce((a, u) => a + m.army[u] * ePow(u), 0), def = CH.World.aiDefPower(k);
-      const kills = Math.round(count(m.army) * U.clamp(def / Math.max(1, att) * 0.8, 0.15, 1));
+      const kills = Math.round(count(m.army) * U.clamp(def / Math.max(1, att) * 0.6, 0.1, 1));
       addKills(s, k.id, kills);
       if (def < att) k.burn = T + 4 * MIN; else k.smoke = T + 3 * MIN;
       return;
@@ -82,7 +82,7 @@ CH.Invasion = (function () {
     const hId = s.defenseHero && s.heroes[s.defenseHero] && s.heroes[s.defenseHero].unlocked && !busy.has(s.defenseHero) ? s.defenseHero : null;
     const hero = hId ? { id: hId, level: s.heroes[hId].level, skin: CH.State.heroSkin(s, hId), might: CH.Meta.might(s, hId, 'def') } : null;
     const cfg = CH.Siege.build({
-      attacker: { name: K.foe + ' (wave ' + w.inv.wave + ')', monsters: m.army, monsterMult: 1 },
+      attacker: { name: K.foe + ' (wave ' + w.inv.wave + ')', monsters: m.army, monsterMult: 1.2 + 0.05 * w.inv.wave },
       defender: { name: s.player.name, kind: 'player', cl, homeTerrain: true, layout: s.buildings.filter(b => b.level > 0).map(b => ({ type: b.type, level: b.level, tx: b.tx, ty: b.ty })), army: { ...s.army }, heroes: hero ? [hero] : [], hero, research: s.research.troops, fortBonus: 0.06 * (s.research.techs.fortification || 0) },
       formation: 'surround', dir: { x: w.px - m.fx, y: w.py - m.fy }, seed: (T % 1e9) | 0, playerSide: 'def',
     });
@@ -105,7 +105,7 @@ CH.Invasion = (function () {
     const hero = m.hero ? { id: m.hero, level: s.heroes[m.hero].level, skin: CH.State.heroSkin(s, m.hero), might: CH.Meta.might(s, m.hero) } : null;
     const cfg = CH.Siege.build({
       attacker: { name: s.player.name, army: m.army, hero, research: s.research.troops },
-      defender: { name: K.name + ' ' + (K.ship === 'saucer' ? 'Mothership' : 'Hell Portal'), kind: 'camp', cl: 6, layout: [{ type: 'outpost', level: 8, tx: 14, ty: 10 }], monsters: horde(w.inv.id, CH.World.armyPower(m.army) * 0.7, true), monsterMult: 1, heroes: [] },
+      defender: { name: K.name + ' ' + (K.ship === 'saucer' ? 'Mothership' : 'Hell Portal'), kind: 'camp', cl: 6, layout: [{ type: 'outpost', level: 8, tx: 14, ty: 10 }], monsters: horde(w.inv.id, CH.World.armyPower(m.army) * 1.0, true), monsterMult: 1.25, heroes: [] },
       formation: m.formation || 'surround', dir: { x: m.tx - m.fx, y: m.ty - m.fy }, seed: (T % 1e9) | 0, playerSide: 'atk',
     });
     const r = CH.Siege.run(cfg), kills = count(r.def.lost);

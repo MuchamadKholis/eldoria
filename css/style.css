@@ -544,3 +544,13 @@ body.in-battle .warbar { display: none !important; }
 .letter { margin: 8px 0; padding: 10px 14px; border-left: 4px solid #a8463a; background: rgba(240,225,200,0.08); font-style: italic; }
 .b-row.locked { opacity: 0.6; }
 @media (max-width: 760px) { .season-head, .season-row { grid-template-columns: 30px 1fr 1fr; } .login-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.inline-speed { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.inline-speed .btn { min-height: 34px; padding: 3px 8px; font-size: 0.8rem; }
+.r-row.active { border: 1px solid var(--gold); background: rgba(255, 200, 80, 0.1); }
+.gear-pair { display: inline-flex; gap: 2px; align-items: center; }
+.gear-pair .btn { min-height: 30px; padding: 2px 8px; font-size: 0.75rem; }
+
+.when { display: flex; flex-direction: column; min-width: 92px; font-weight: 900; color: var(--gold-hi); font-size: 0.85rem; }
+.when i { font-style: normal; font-weight: 700; color: var(--muted); font-size: 0.75rem; }
+.realm-alien { border-color: #5fffa0; } .realm-hell { border-color: #ff6a3a; } .realm-heaven { border-color: #ffe9a0; }

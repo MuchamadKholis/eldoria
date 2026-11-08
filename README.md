@@ -24,6 +24,7 @@ Progress, including the whole world, saves in the browser (localStorage). The wo
 **Build kingdom → train troops → explore world → scout → attack → loot → upgrade → survive AI attacks**
 
 ### Your kingdom
+- **A large fixed kingdom area** (28×20 tiles) from the start.
 - **Grid building:** place, drag to move, upgrade, collect and build walls. Everything from Crownhold carries over: builders, timers that run offline, storage caps, and production that stops when full.
 - **Buildings (36 types):**
   - *Economy:* Castle, Gold Mine, Lumber Mill, Stone Quarry, **Farm**, Gold/Wood/Stone storage, **Granary**, Builder Hut.
@@ -172,6 +173,35 @@ Defeat the same kingdom three times and it may become your **Nemesis** (☠ on t
 - **The ladder:** eight champions each week, with new ones every Monday. Your whole home army fights, but **troops never die**.
 - **Rewards:** wins pay gems and materials. A loss means a 5-minute rest.
 
+### Realm Conquest: four worlds
+Three times a week a portal opens beside the Citadel:
+
+| Realm | Opens | Ruler's title | Ruler's buff |
+|---|---|---|---|
+| 👽 **Xyrrath** (alien) | Tuesday 20:00 | Conqueror of Xyrrath | +10% march speed, +5% attack |
+| 🔥 **Infernum** (hell) | Thursday 20:00 | Lord of Infernum | +10% attack |
+| ✨ **Elysium** (heaven: Seraphs, Celestial Knights, Valkyries, Archangel) | Sunday 20:00 | Sovereign of Elysium | +10% defense & health, +10% research |
+
+- **How it works:** each portal is open for 60 minutes. Fight through the Outer Gate, Legion Camp and Inner Sanctum, then storm the **Realm Citadel**. The enemies are strong: they scale with the strongest armies in the world.
+- **Rewards:** gems and materials for every stage, and a big chest for the citadel. Conquering it makes you **ruler of that world for a week**, with the title and buff above.
+- **Losses:** fallen troops return home after 5 minutes.
+- **If you don't conquer it:** the strongest AI kingdom claims the realm when the portal closes.
+- **Emperor:** be King of Eldoria *and* ruler of all three realms at once for **Emperor of the Four Worlds** (title plus 2,000 gems).
+- **Schedule:** edit `CH.REALMS` in `js/core/realm.js` (day, hour, minute, minutes open).
+
+### Royal titles
+- **The King of Eldoria** gets +10% troop attack, +10% march speed, +10% troop defense and health, +15% training speed, +15% production and +15% research speed.
+- **Granting titles:** in the Royal Court the king grants five honour titles and five villain titles:
+  - **Grand Marshal:** attack and march speed.
+  - **Royal Guardian:** defense and health.
+  - **Master of Arms:** training speed.
+  - **Royal Steward:** production.
+  - **Royal Scholar:** research speed.
+  - **Traitor, Coward, Slacker, Beggar, Fool:** the matching penalties.
+- **Effects on AI kingdoms:** titles change their real strength and economy. Honoured kingdoms stay loyal; villains hold a grudge.
+- **When an AI is king:** it honours its faction and brands its enemies, including you if it holds a grudge.
+- **Where to change it:** values live in `CH.THRONE.titles` in `defs.js`.
+
 ### Rallies
 When you attack a kingdom, fort or the Citadel and you belong to a faction, you can start a **rally**.
 - **Who joins:** up to 9 nearby allies (10 castles in total) each lend 40% of their troops.
@@ -213,8 +243,14 @@ Four themes for your **castle** and **every hero**: **Dunia** (Verdant Crown), *
 | Peace Shield 2h / 8h | 80 / 200 gems |
 | Random / Advanced Teleport | 100 / 300 gems |
 | Extra march slot (up to 5 marches in total) | 300, 600, 1,200… gems |
+| March Boost (halves a march's remaining time) | 20 gems |
+| Iron Ore ×50 / Leather ×50 / Crystal ×10 / Dragon Scale ×2 | 15 / 15 / 40 / 80 gems |
 
   Bought resources may exceed storage. Edit prices in `CH.GEM_SHOP` in `defs.js`.
+- **Marches** can be sped up from the marches drawer: ⚡ a March Boost halves the time left, 💎 gems arrive at once.
+- **Smelting:** spare gear can be melted back into Iron Ore in the Forge.
+- **Reports** can be marked read, cleared when read, or all cleared.
+- **Speed-ups** for research and construction sit right on the row in the Academy and Buildings lists.
 - **Gathering:** send troops to a resource tile; they gather up to their load, then march home. Resources your marches carry home (gathered or looted) are always kept in full, even above storage limits.
 - **Factions** can be left at any time from the Factions screen; you can join one again after 1 hour.
 - **Redeem codes** (More → Redeem code):
@@ -238,6 +274,7 @@ js/core/state.js      your kingdom: economy, food, training, infirmary, items, r
 js/core/throne.js     the Aurelion Citadel: weekly Throne War, rallies, coronation, Royal Court, leaderboards
 js/core/meta.js       daily quests, login, achievements, season pass, forge & talents, nemesis, diplomacy, arena
 js/core/invasion.js   Alien and Demon invasions
+js/core/realm.js      Realm Conquest: portals to Xyrrath, Infernum and Elysium; Emperor of the Four Worlds
 js/ui/meta.js         screens for the systems above
 js/core/world.js      Eldoria: generation, AI simulation, marches, battles, reports, events, factions, teleport, offline catch-up
 js/core/audio.js      synthesized sound and music
@@ -248,7 +285,7 @@ js/render/view.js     kingdom and battle renderer, camera
 js/render/worldview.js world map renderer
 js/ui/*.js            HUD, screens, world map UI, battle HUD
 js/main.js            app flow, game loop, offline summary
-tests/                run_tests.js (51 logic tests), browser_test.py (45), throne_test.py (20), meta_test.py (21)
+tests/                run_tests.js (60 logic tests), browser_test.py (45), throne_test.py (20), meta_test.py (34)
 tools/                build.py (single file), codegen.js (redeem codes)
 ```
 
@@ -262,7 +299,7 @@ tools/                build.py (single file), codegen.js (redeem codes)
 - **New redeem code:** `node tools/codegen.js CODE gold=1000 food=5000 gems=20 swordsman=50 shield8h=1 hero=elara expires=2026-12-31 label="Gift"`, then paste the printed line into `js/data/codes.js`. Rewards can be resources (gold, wood, stone, food, gems, runes), player XP, any of the 22 troop types, any of the 10 bag items, hero unlocks (`hero=elara`) and skins (`skin=castle:celestial`, `skin=hero:infernal:aldric`). Conditions: `start=`, `expires=` and `minCastle=`.
 
 ## Testing
-`node tests/run_tests.js`: 51 logic tests, including the Throne War schedule, a full war with AI rallies and coronation, player rallies, the Royal Court, march slots and skins.
+`node tests/run_tests.js`: 60 logic tests, including the Throne War schedule, a full war with AI rallies and coronation, player rallies, the Royal Court, march slots and skins.
 - Economy: production caps, food upkeep and desertion, batch training, the infirmary, items, techs and redeem codes.
 - Combat rules: counters and siege multipliers.
 - The world: generation, AI growth and AI-vs-AI wars, and the fairness rules (beginner protection, shields turning armies back, warning time).
@@ -279,7 +316,7 @@ tools/                build.py (single file), codegen.js (redeem codes)
 
 `python3 tests/throne_test.py`: 20 checks. It shifts the page clock to Saturday 15:02, then checks the war banner, the Citadel panel, a rally with up to 9 allies, the Citadel battle report, burning and smoking castles, the coronation after 30 minutes, every leaderboard tab, the Royal Court, buying skins and march slots, and that there are no console errors.
 
-`python3 tests/meta_test.py`: 21 checks.
+`python3 tests/meta_test.py`: 34 checks.
 - **Progression:** daily quests and bonus chest, login streak, wearing a title, season free and premium claims, an arena fight with no deaths, forging and talents.
 - **Diplomacy and Nemesis:** truce, hiring mercenaries, and a Nemesis letter.
 - **Alien Invasion:** the banner, a wave on all 61 castles, your defense with no deaths, assaulting a mothership, and the end-of-event reward and ranking.

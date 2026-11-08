@@ -59,6 +59,8 @@ CH.Meta = (function () {
     { id: 'exorcist', name: 'Exorcist', desc: 'Defeat 1,000 demon invaders', title: 'Exorcist', test: c => c.demonKills >= 1000, gems: 300 },
     { id: 'nemesis', name: 'Nemesis Breaker', desc: 'Defeat your Nemesis', title: 'Nemesis Breaker', test: c => c.nemesisWin >= 1, gems: 300 },
     { id: 'arena', name: 'Arena Champion', desc: 'Clear all 8 arena rounds', title: 'Arena Champion', test: c => c.arenaTop >= 8, gems: 400 },
+    { id: 'realm', name: 'Realm Breaker', desc: 'Conquer another world through its portal', title: 'Realm Breaker', test: c => c.realmWin >= 1, gems: 400 },
+    { id: 'emperor', name: 'Emperor of the Four Worlds', desc: 'Rule Eldoria, Xyrrath, Infernum and Elysium at the same time', title: 'Emperor of the Four Worlds', test: c => c.emperor >= 1, gems: 3000 },
     { id: 'faithful', name: 'Faithful', desc: 'Log in 7 days in a row', title: 'The Faithful', test: c => c.streak >= 7, gems: 200 },
   ];
   /* Season pass: 30 levels, 500 XP each, one season = 30 days. */
@@ -179,6 +181,21 @@ CH.Meta = (function () {
     s.gear.push(it);
     if (tier === 4) track(s, 'legendary', 1);
     return { ok: true, item: it };
+  }
+  /** Melt an unused item back into Iron Ore (60% of its iron, plus a little crystal for rare+). */
+  function smelt(s, itemId) {
+    ensure(s); const it = s.gear.find(g => g.id === itemId);
+    if (!it) return { ok: false, reason: 'Item not found' };
+    if (CH.HERO_ORDER.some(h => Object.values(s.heroes[h].gear).includes(itemId))) return { ok: false, reason: 'Unequip it first' };
+    const c = TIERS[it.tier].cost, got = { iron: Math.floor(c.iron * 0.6), crystal: it.tier >= 2 ? Math.floor((c.crystal || 0) * 0.3) : 0 };
+    s.gear = s.gear.filter(g => g !== it); s.mats.iron += got.iron; s.mats.crystal += got.crystal;
+    return { ok: true, got };
+  }
+  function buyMat(s, k) {
+    ensure(s); const o = CH.GEM_SHOP.mats[k];
+    if (!o) return { ok: false, reason: 'Not for sale' };
+    if (s.res.gems < o.gems) return { ok: false, reason: 'Not enough gems (' + o.gems + ')' };
+    s.res.gems -= o.gems; s.mats[k] = (s.mats[k] || 0) + o.n; return { ok: true, n: o.n };
   }
   function equip(s, hero, itemId) {
     ensure(s); const it = s.gear.find(g => g.id === itemId), H = s.heroes[hero];
@@ -305,6 +322,6 @@ CH.Meta = (function () {
     QUESTS, LOGIN, MATS, TIERS, SLOTS, TALENTS, ACH, ARENA_NAMES, SEASON_LV, LV_XP, PREMIUM_PRICE, seasonFree, seasonPrem, seasonEnds,
     ensure, refresh, track, give, claimQuest, claimDailyBonus, loginState, claimLogin, checkAchievements, setTitle, titleOf,
     seasonLevel, claimSeason, buyPremium, craft, equip, unequip, talentPoints, addTalent, resetTalents, might, marchBonus, campMats,
-    onPlayerBeat, tributeCost, truceCost, hireCost, tribute, truce, breakTruce, hire, arenaArmy, arenaReward, arenaFight, claimable, dayKey,
+    smelt, buyMat, onPlayerBeat, tributeCost, truceCost, hireCost, tribute, truce, breakTruce, hire, arenaArmy, arenaReward, arenaFight, claimable, dayKey,
   };
 })();

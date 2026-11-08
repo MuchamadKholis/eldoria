@@ -16,6 +16,7 @@ CH.CONFIG = {
   AREA: [[14, 12], [16, 13], [18, 14], [20, 15], [22, 16], [24, 17], [26, 18], [26, 18]],
   START_RES: { gold: 1500, wood: 1500, stone: 1000, food: 3000, gems: 200, runes: 0 },
   // ---- World (Eldoria) ----
+  HOME_AREA: { x: 1, y: 1, w: 28, h: 20 }, // your buildable kingdom (fixed; the whole map minus a border)
   WORLD_SIZE: 96,          // world map is WORLD_SIZE × WORLD_SIZE tiles
   AI_COUNT: 60,            // AI kingdoms generated (architecture supports many more)
   SEC_PER_TILE: 6,         // base march time per tile (seconds), divided by troop march speed
@@ -315,12 +316,20 @@ CH.ITEMS = {
   shield8h: { name: 'Peace Shield 8h', kind: 'shield', ms: 8 * 3600e3, icon: 'shield', desc: 'No kingdom can attack or scout you for 8 hours. Marching on others drops it.' },
   teleRandom: { name: 'Random Teleport', kind: 'teleport', random: true, icon: 'map', desc: 'Moves your castle to a random safe spot.' },
   teleAdvanced: { name: 'Advanced Teleport', kind: 'teleport', icon: 'map', desc: 'Moves your castle to a tile you choose on the world map.' },
+  marchBoost: { name: 'March Boost', kind: 'march', icon: 'time', desc: 'Halves the remaining time of one march.' },
   goldPack: { name: 'Gold Chest', kind: 'res', res: { gold: 5000 }, icon: 'gold', desc: '+5,000 gold.' },
   woodPack: { name: 'Timber Bundle', kind: 'res', res: { wood: 5000 }, icon: 'wood', desc: '+5,000 wood.' },
   stonePack: { name: 'Stone Crate', kind: 'res', res: { stone: 5000 }, icon: 'stone', desc: '+5,000 stone.' },
   foodPack: { name: 'Food Wagon', kind: 'res', res: { food: 8000 }, icon: 'food', desc: '+8,000 food.' },
 };
 CH.ITEM_ORDER = Object.keys(CH.ITEMS);
+/* Celestial host of Elysium (realm units) */
+Object.assign(CH.ENEMIES, {
+  seraph: { name: 'Seraph', hp: 140, dmg: 22, rate: 1.0, range: 3.0, speed: 2.0, target: 'any', flying: true, proj: 'holy', magic: true, size: 10, sprite: 'seraph', threat: 3, gold: 6, desc: 'Six-winged angel hurling holy light.' },
+  celestialKnight: { name: 'Celestial Knight', hp: 700, dmg: 40, rate: 0.9, range: 0.8, speed: 1.3, armor: 0.35, target: 'any', size: 13, sprite: 'celestialKnight', threat: 7, gold: 15, desc: 'Golden-armoured paladin of the heavens.' },
+  valkyrie: { name: 'Valkyrie', hp: 420, dmg: 36, rate: 1.2, range: 1.2, speed: 2.4, target: 'any', flying: true, size: 12, sprite: 'valkyrie', threat: 6, gold: 12, desc: 'Winged spear-maiden diving from the clouds.' },
+  archangel: { name: 'Archangel', hp: 9000, dmg: 120, rate: 0.7, range: 3.2, speed: 1.0, target: 'any', flying: true, proj: 'holy', splash: 1.4, large: true, size: 22, sprite: 'archangel', threat: 80, gold: 250, desc: 'Guardian of Elysium\'s citadel.' },
+});
 /* Alien invaders (event units) */
 Object.assign(CH.ENEMIES, {
   alienDrone: { name: 'Alien Drone', hp: 90, dmg: 12, rate: 1.4, range: 2.4, speed: 2.6, target: 'any', flying: true, proj: 'laser', size: 9, sprite: 'alienDrone', threat: 2, gold: 5, desc: 'Hovering saucer that fires lasers over walls.' },
@@ -335,7 +344,8 @@ CH.GEM_SHOP = {
     { amount: 5000, gems: 20 }, { amount: 25000, gems: 90 }, { amount: 100000, gems: 320 },
   ],
   foodBonus: 1.5, // food packs contain 50% more
-  items: { speed5m: 10, speed1h: 60, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  items: { speed5m: 10, speed1h: 60, marchBoost: 20, shield2h: 80, shield8h: 200, teleRandom: 100, teleAdvanced: 300 },
+  mats: { iron: { n: 50, gems: 15 }, leather: { n: 50, gems: 15 }, crystal: { n: 10, gems: 40 }, dragonscale: { n: 2, gems: 80 } },
   fillPerGem: 300, // "top up to capacity": 1 gem per 300 resources missing
 };
 
@@ -360,7 +370,21 @@ CH.THRONE = {
    * warMinutes: how long the war lasts. The king reigns until the next war (one week). */
   warDay: 6, warHour: 15, warMinute: 0, warMinutes: 30,
   rallyMax: 10, rallyMuster: 60, // up to 10 castles; rallies gather for 60 s before marching
-  kingBonus: { prod: 0.1, atk: 0.05 },
+  // The king enjoys every royal buff.
+  kingBuffs: { atk: 0.10, march: 0.10, def: 0.10, train: 0.15, prod: 0.15, research: 0.15 },
+  // Titles the king can grant. "def" means troop defense + health.
+  titles: {
+    marshal: { name: 'Grand Marshal', good: true, buffs: { atk: 0.10, march: 0.15 } },
+    guardian: { name: 'Royal Guardian', good: true, buffs: { def: 0.10 } },
+    armsmaster: { name: 'Master of Arms', good: true, buffs: { train: 0.20 } },
+    steward: { name: 'Royal Steward', good: true, buffs: { prod: 0.20 } },
+    scholar: { name: 'Royal Scholar', good: true, buffs: { research: 0.20 } },
+    traitor: { name: 'Traitor', good: false, buffs: { atk: -0.10, march: -0.15 } },
+    coward: { name: 'Coward', good: false, buffs: { def: -0.10 } },
+    slacker: { name: 'Slacker', good: false, buffs: { train: -0.20 } },
+    beggar: { name: 'Beggar', good: false, buffs: { prod: -0.20 } },
+    fool: { name: 'Fool', good: false, buffs: { research: -0.20 } },
+  },
   prizes: [
     { tier: 'royal', name: 'Royal Treasure', count: 1, reward: { gems: 1000, gold: 100000, food: 100000 }, items: { shield8h: 2, teleAdvanced: 1, speed1h: 5 } },
     { tier: 'noble', name: 'Noble Chest', count: 3, reward: { gems: 300, gold: 50000, food: 50000 }, items: { speed1h: 2 } },

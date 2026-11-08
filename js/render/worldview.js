@@ -99,6 +99,7 @@ CH.WorldView = (function () {
       for (const fo of w.forts) if (vis(fo)) this.fort(c, fo);
       if (w.throne) this.citadel(c, w.throne, now, s);
       if (w.inv) for (const sh of w.inv.ships) this.ship(c, sh, w.inv.id, now);
+      { const id = CH.REALM_ORDER.find(r => CH.Realm.window(r, now).active); if (id && w.throne) this.portal(c, w.throne.x + 6, w.throne.y - 5, id, now); }
       const pPow = CH.State.power(s);
       if (f.kin) for (const k2 of w.kingdoms) if (vis(k2) && this.passDiff(f.diff, CH.World.power(k2), pPow)) this.kingdom(c, k2, now, false);
       this.kingdom(c, { x: w.px, y: w.py, cl: CH.State.castleLevel(s), f: s.faction, sh: s.shieldUntil, name: s.player.name, burn: w.pburn, smoke: w.psmoke, skin: s.equipped && s.equipped.castle }, now, true);
@@ -137,6 +138,17 @@ CH.WorldView = (function () {
         if (z > 0.6 && f.mon) for (const m of w.camps) if (vis(m) && !m.dead) label(m.x, m.y, 'Lv ' + m.lvl, '#ffb3a8', 24);
         if (z > 0.6 && f.res) for (const t of w.tiles) if (vis(t)) label(t.x, t.y, 'Lv ' + t.lvl, '#e8f2d8', 22);
       }
+    }
+    /** Realm portal next to the Citadel while a Realm Conquest is open. */
+    portal(c, x0, y0, id, now) {
+      const R = CH.REALMS[id], x = (x0 + 0.5) * TW, y = (y0 + 0.5) * TW, t = now / 1000;
+      const rgb = { alien: '120,255,170', hell: '255,110,60', heaven: '255,236,160' }[id];
+      c.save(); c.translate(x, y);
+      c.globalCompositeOperation = 'lighter'; A.glow(c, 0, 0, 80, rgb, 0.45); c.globalCompositeOperation = 'source-over';
+      A.rect(c, -34, -10, 10, 50, '#d8d0bc'); A.rect(c, 24, -10, 10, 50, '#d8d0bc'); A.rect(c, -38, -16, 76, 10, '#e8e0cc');
+      for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(0, 14, 22 - i * 4, 26 - i * 5, 0, 0, 6.283); c.strokeStyle = 'rgba(' + rgb + ',' + (0.9 - i * 0.15) + ')'; c.lineWidth = 4; c.setLineDash([10, 6]); c.lineDashOffset = (i % 2 ? 1 : -1) * t * 40; c.stroke(); }
+      c.setLineDash([]); c.font = '900 22px system-ui'; c.textAlign = 'center'; c.fillText(R.icon, 0, 22);
+      c.restore();
     }
     /** Invasion mothership (aliens) or hell portal (demons). */
     ship(c, sh, kind, now) {

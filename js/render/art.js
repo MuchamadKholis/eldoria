@@ -430,6 +430,25 @@ CH.Art = (function () {
       line(c, -s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14); line(c, s * 0.4, -s * 0.5, 0, -s * 1.8, '#6b4a2a', s * 0.14);
       c.save(); c.translate(0, -s * 1.8); c.rotate(o.swing ? 0.9 : -0.6); line(c, -s * 0.6, 0, s * 1.4, 0, '#7a5a3a', s * 0.12); rect(c, -s * 0.8, -s * 0.1, s * 0.4, s * 0.5, '#4a4038'); c.restore();
     },
+    seraph(c, s, a) {
+      const f = Math.sin(a * 9) * s * 0.4;
+      for (const sx of [-1, 1]) for (const k of [0, 1, 2]) poly(c, [0, -s * (1.2 + k * 0.15), sx * s * (1.4 - k * 0.2), -s * (1.9 - k * 0.45) + f * (k === 0 ? 1 : 0.5), sx * s * 0.3, -s * (0.9 + k * 0.2)], k ? '#fff6d8' : '#ffffff', 'rgba(200,170,90,0.5)', 1);
+      ell(c, 0, -s * 0.9, s * 0.3, s * 0.5, '#f4efe2'); circle(c, 0, -s * 1.55, s * 0.24, '#f2d2b0');
+      c.beginPath(); c.ellipse(0, -s * 1.95, s * 0.28, s * 0.08, 0, 0, 6.283); c.strokeStyle = '#ffd34a'; c.lineWidth = s * 0.08; c.stroke();
+    },
+    celestialKnight: (c, s, a, o) => humanoid(c, s, a, { body: '#f2e2a8', helm: '#ffd34a', visor: true, plume: '#ffffff', cape: '#f4efe2', weapon: 'sword', shield: '#ffd34a', swing: o.swing }),
+    valkyrie(c, s, a, o) {
+      const f = Math.sin(a * 10) * s * 0.5;
+      for (const sx of [-1, 1]) poly(c, [sx * s * 0.2, -s * 1.3, sx * s * 1.5, -s * 2.0 + f, sx * s * 1.1, -s * 1.0], '#e8eef8', 'rgba(120,140,170,0.5)', 1);
+      humanoid(c, s * 0.9, a, { body: '#c8d4e8', helm: '#d0d8e4', plume: '#ffd34a', weapon: 'spear', swing: o.swing, hair: '#ffe08a' });
+    },
+    archangel(c, s, a) {
+      const f = Math.sin(a * 4) * s * 0.3;
+      c.save(); c.globalCompositeOperation = 'lighter'; glow(c, 0, -s * 1.4, s * 2.2, '255,236,160', 0.35); c.restore();
+      for (const sx of [-1, 1]) for (const k of [0, 1]) poly(c, [sx * s * 0.25, -s * (1.5 + k * 0.2), sx * s * (2.2 - k * 0.5), -s * (2.6 - k * 0.6) + f, sx * s * (1.4 - k * 0.3), -s * (0.9 + k * 0.3)], k ? '#fff3c8' : '#ffffff', 'rgba(200,170,90,0.6)', 1.5);
+      humanoid(c, s, a, { body: '#ffffff', helm: '#ffd34a', cape: '#ffe08a', weapon: 'sword', plume: '#ffd34a' });
+      c.beginPath(); c.ellipse(0, -s * 2.15, s * 0.35, s * 0.1, 0, 0, 6.283); c.strokeStyle = '#ffd34a'; c.lineWidth = s * 0.1; c.stroke();
+    },
     alienDrone(c, s, a) {
       const b = Math.sin(a * 8) * s * 0.1;
       ell(c, 0, -s * 1.1 + b, s * 1.1, s * 0.35, '#9aa6b8'); ell(c, 0, -s * 1.2 + b, s * 0.9, s * 0.22, '#c8d2e0');

@@ -156,6 +156,16 @@ CH.Screens = (function () {
     };
   }
 
+  /** Inline speed-up buttons placed right next to whatever is being built or researched. */
+  function speedBtns(target, gemCost, gemAct, id) {
+    const s = save();
+    return '<div class="inline-speed">' + ['speed5m', 'speed1h'].filter(i => s.items[i] > 0).map(i => '<button class="btn btn-quiet" data-act="sitem" data-item="' + i + '" data-target=\'' + JSON.stringify(target) + '\'>' + (i === 'speed5m' ? '−5m' : '−1h') + ' ×' + s.items[i] + '</button>').join('') +
+      '<button class="btn btn-gem" data-act="' + gemAct + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>' + icon('gems') + gemCost + '</button></div>';
+  }
+  const speedActs = {
+    sitem: b => { const r = S.useItem(save(), b.dataset.item, Date.now(), JSON.parse(b.dataset.target)); if (!r.ok) return fail(r); CH.App.handleEvents(S.tick(save())); persist(); UI.refreshSheet(); },
+  };
+
   /* ---------------- Army (training per military building) ---------------- */
   const TRAINERS = ['barracks', 'archeryRange', 'stable', 'siegeWorkshop'];
   function jobBox(job, target, label) {
@@ -261,16 +271,19 @@ CH.Screens = (function () {
 
   function events() {
     const s = save(), w = s.world, now = Date.now(), e = CH.World.eventAt(w, now);
-    const upcoming = [1, 2, 3].map(i => CH.EVENTS[(((e.idx + i) % CH.EVENTS.length) + CH.EVENTS.length) % CH.EVENTS.length]);
+    const sched = CH.MetaUI.schedule(s, now, 8);
+    const when = t => { const d = new Date(t); return (d.toDateString() === new Date(now).toDateString() ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    const live = []; for (const id of CH.REALM_ORDER) if (CH.Realm.window(id, now).active) live.push('<button class="btn btn-gold" data-act="realm" data-id="' + id + '">' + CH.REALMS[id].icon + ' Portal to ' + CH.REALMS[id].name + ' is OPEN</button>');
     return {
       title: 'World events',
       html: '<div class="panel ev-now"><span class="kicker">' + (e.active ? 'Live now · ends in ' + U.time((e.ends - now) / 1000) : 'Next event in ' + U.time((e.next - now) / 1000)) + '</span><h3>' + e.ev.name + '</h3><p>' + e.ev.desc + '</p>' +
         (e.active && e.ev.id === 'dragonHunt' && w.dragon ? '<button class="btn btn-gold" data-act="dragon">Find the dragon</button>' : '') + '</div>' +
         (w.inv || w.invLast ? '<h4 class="group">' + CH.Invasion.KINDS[(w.inv || w.invLast).id].icon + ' Invasion kill ranking' + (w.inv ? ' (live)' : ' (last)') + '</h4><div class="ranks">' + CH.Invasion.ranking(s).slice(0, 10).map((r, i) => '<div class="rank-row' + (r.key === 'player' ? ' me' : '') + '"><span class="rk">' + (i + 1) + '</span><b>' + esc(r.name) + '</b><span></span><span class="rv">' + U.fmt(r.kills) + ' ☠</span></div>').join('') + '</div>' +
           (w.inv ? '<p class="muted">Your reward if it ended now: ' + UI.reward(CH.Invasion.rewardFor(w.inv.kills.player || 0, CH.Invasion.ranking(s).findIndex(r => r.key === 'player') + 1 || 99)) + '</p>' : '') : '') +
-        '<h4 class="group">Coming up</h4><div class="b-list">' + upcoming.map(x => '<div class="b-row"><div class="b-info"><b>' + x.name + '</b><span class="muted">' + x.desc + '</span></div></div>').join('') + '</div>' +
+        (live.length ? '<div class="row">' + live.join('') + '</div>' : '') +
+        '<h4 class="group">Coming up</h4><div class="b-list">' + sched.map(x => '<div class="b-row"><span class="when">' + when(x.t) + '<i>in ' + U.time((x.t - now) / 1000) + '</i></span><div class="b-info"><b>' + x.name + '</b><span class="muted">' + x.desc + '</span></div></div>').join('') + '</div>' +
         '<h4 class="group">News of the realm</h4><ul class="news">' + w.news.slice(0, 20).map(n => '<li><span class="muted">' + U.time((now - n.t) / 1000) + ' ago</span> ' + esc(n.text) + '</li>').join('') + '</ul>',
-      on: { dragon: () => { UI.closeSheets(); CH.WorldUI.open(w.dragon); } },
+      on: { dragon: () => { UI.closeSheets(); CH.WorldUI.open(w.dragon); }, realm: b => UI.sheet('realms', b.dataset.id) },
     };
   }
 
@@ -299,12 +312,15 @@ CH.Screens = (function () {
     const ico = r => ({ attack: '⚔', defense: '🛡', scout: '👁', monster: '🐉', gather: '⛏', fort: '🏰', event: '★' }[r.kind] || '✉');
     return {
       title: 'Reports',
-      html: '<div class="tabs">' + [['all', 'All'], ['battle', 'Battles'], ['scout', 'Scouting'], ['gather', 'Gathering']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '<button class="btn btn-quiet" data-act="readall">Mark all read</button></div>' +
+      html: '<div class="tabs">' + [['all', 'All'], ['battle', 'Battles'], ['scout', 'Scouting'], ['gather', 'Gathering']].map(([k, n]) => '<button class="tab' + (tab === k ? ' on' : '') + '" data-act="tab" data-t="' + k + '">' + n + '</button>').join('') + '<button class="btn btn-quiet" data-act="readall">Mark all read</button><button class="btn btn-quiet" data-act="clearread">Clear read</button><button class="btn btn-quiet" data-act="clearall">Clear all</button></div>' +
         (list.length ? '<div class="b-list">' + list.map(r => '<button class="b-row rep-row ' + (r.read ? '' : 'unread ') + (r.outcome || '') + '" data-act="open" data-id="' + r.id + '"><span class="rep-ico">' + ico(r) + '</span><div class="b-info"><b>' + esc(r.title) + '</b><span class="muted">' + U.time((Date.now() - r.t) / 1000) + ' ago' + (r.replay ? ' · replay available' : '') + '</span></div></button>').join('') + '</div>' : '<p class="muted">No reports yet.</p>'),
       on: {
         tab: b => { mail.tab = b.dataset.t; UI.refreshSheet(); },
         open: b => { const r = s.reports.find(x => x.id === b.dataset.id); if (r) CH.WorldUI.showReport(r); setTimeout(() => UI.refreshSheet(), 50); },
         readall: () => { for (const r of s.reports) r.read = true; s.unread = 0; persist(); UI.refreshSheet(); },
+        clearread: () => { s.reports = s.reports.filter(r => !r.read); persist(); UI.refreshSheet(); },
+        clearall: () => UI.modal('<h3>Delete all reports?</h3><p>Battle reports and their replays will be removed.</p><div class="row"><button class="btn btn-danger" data-ca>Delete all</button><button class="btn" data-close>Cancel</button></div>',
+          { onClick: e => { if (e.target.closest('[data-ca]')) { s.reports = []; s.unread = 0; persist(); UI.closeModal(); UI.refreshSheet(); CH.Home.refreshHud(true); } } }),
       },
     };
   }
@@ -383,10 +399,12 @@ CH.Screens = (function () {
         '<h4 class="group">Marches</h4><div class="b-row">' + icon('swords', 'big-ico') + '<div class="b-info"><b>Extra march slot</b><span class="muted">You have ' + S.marchSlots(s) + ' of ' + CH.MAX_MARCHES + ' marches (' + S.baseMarchSlots(s) + ' from your castle + ' + (s.extraMarch || 0) + ' bought). Permanent.</span></div>' +
           (S.marchSlots(s) >= CH.MAX_MARCHES ? '<span class="maxed">Max</span>' : '<button class="btn btn-gem" data-act="march"' + (s.res.gems >= CH.GEM_SHOP.marchSlot(s.extraMarch || 0) ? '' : ' disabled') + '>' + icon('gems') + CH.GEM_SHOP.marchSlot(s.extraMarch || 0) + '</button>') + '</div>' +
         '<h4 class="group">Skins</h4><div class="b-row">' + icon('shield', 'big-ico') + '<div class="b-info"><b>Castle & hero skins</b><span class="muted">Dunia, Surgawi, Neraka, Kegelapan</span></div><button class="btn btn-gold" data-act="skins">Open wardrobe</button></div>' +
+        '<h4 class="group">Forge materials</h4><div class="row">' + Object.entries(CH.GEM_SHOP.mats).map(([k, o]) => '<button class="btn btn-gem" data-act="mat" data-k="' + k + '"' + (s.res.gems >= o.gems ? '' : ' disabled') + '>+' + o.n + ' ' + CH.Meta.MATS[k] + ' (have ' + U.fmt((s.mats || {})[k] || 0) + ') · ' + icon('gems') + o.gems + '</button>').join('') + '</div>' +
         '<h4 class="group">Items</h4><div class="b-list">' + itemCards + '</div>',
       on: {
         res: b => doBuy('res', b.dataset.r, +b.dataset.i), fill: b => doBuy('fill', b.dataset.r), item: b => doBuy('item', b.dataset.id),
         redeem: () => UI.sheet('redeem'),
+        mat: b => { const r = CH.Meta.buyMat(s, b.dataset.k); if (!r.ok) return fail(r); CH.Audio.play('collect'); persist(); UI.toast('+' + r.n + ' ' + CH.Meta.MATS[b.dataset.k], 'good'); UI.refreshSheet(); },
         march: () => { const r = S.buyMarchSlot(s); if (!r.ok) return fail(r); CH.Audio.play('horn'); persist(); UI.toast('New march slot! You now have ' + S.marchSlots(s) + ' marches.', 'good'); UI.refreshSheet(); },
         skins: () => UI.sheet('skins'),
       },
@@ -440,6 +458,7 @@ CH.Screens = (function () {
         const d = B[b.type], why = S.upgradeBlocker(s, b), max = S.maxLevelFor(s, b.type);
         return '<div class="b-row"><canvas data-building="' + b.type + '" data-level="' + Math.max(1, b.level) + '"></canvas><div class="b-info"><b>' + d.name + '</b><span class="muted">Level ' + b.level + ' / ' + max + (b.job ? ' · ' + (b.job.kind === 'clear' ? 'clearing' : 'upgrading') + ' ' + U.time((b.job.ends - now) / 1000) : '') + '</span></div>' +
           (d.maxLevel > 1 && !b.job ? '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="up" data-id="' + b.id + '"' + (why === 'Maximum level' ? ' disabled' : '') + '>' + (why && why !== 'Not enough resources' ? why : 'Upgrade') + '</button>' : '') +
+          (b.job ? speedBtns({ kind: 'building', id: b.id }, S.speedUpCost(b), 'bspeed', b.id) : '') +
           '<button class="btn btn-quiet" data-act="show" data-id="' + b.id + '">Show</button></div>';
       }).join('') + '</div>';
     }).join('');
@@ -451,6 +470,8 @@ CH.Screens = (function () {
         '<h4 class="group">Walls</h4><p class="muted">' + walls.length + ' / ' + S.maxCount(s, 'wall') + ' placed · ' + Object.entries(wallLv).map(([l, n]) => n + ' at level ' + l).join(', ') + '</p>',
       on: {
         up: b => { const bb = S.byId(s, +b.dataset.id); if (bb) CH.Home.upgradeDialog(bb); },
+        ...speedActs,
+        bspeed: b => { const bb = S.byId(s, +b.dataset.id); if (!bb || !bb.job) return; const r = S.speedUp(s, bb.id); if (r && r.ok === false) return fail(r); CH.App.handleEvents(S.tick(s)); persist(); UI.refreshSheet(); },
         show: b => { const bb = S.byId(s, +b.dataset.id); UI.closeSheets(); if (bb) CH.Home.select(bb); },
       },
     };
@@ -460,9 +481,11 @@ CH.Screens = (function () {
   function lab() {
     const s = save(), ll = S.labLevel(s), now = Date.now(), j = s.rjob;
     const row = (kind, id, name, sprite, size, lvl, extra) => {
+      if (kind === 'tech' && j && j.kind === 'tech' && j.id === id) return '<div class="r-row active">' + icon('flask', 'big-ico') + '<div class="b-info"><b>' + name + ' → ' + j.to + '</b><div class="bar"><i style="width:' + Math.round((1 - (j.ends - now) / 1000 / j.total) * 100) + '%"></i></div><span class="muted">' + U.time((j.ends - now) / 1000) + ' left</span></div>' + speedBtns({ kind: 'research' }, Math.max(1, Math.ceil((j.ends - now) / 30000)), 'rush') + '</div>';
       if (kind === 'tech') { const why = S.researchBlocker(s, kind, id), c = S.researchCost(kind, id, lvl + 1);
         return '<div class="r-row">' + icon('flask', 'big-ico') + '<div class="b-info"><b>' + name + '</b><span class="muted">Level ' + lvl + ' / ' + CH.TECHS[id].max + ' · ' + extra + '</span></div>' + (why === 'Maximum level' ? '<span class="maxed">Max</span>' : '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="research" data-kind="tech" data-id="' + id + '"' + (why ? ' disabled' : '') + '>' + (why && why !== 'Not enough resources' ? why : UI.cost(c, s) + ' · ' + U.time(CH.RESEARCH.techTime(lvl + 1))) + '</button>') + '</div>'; }
       const why = S.researchBlocker(s, kind, id), c = S.researchCost(kind, id, lvl + 1);
+      if (j && j.kind === kind && j.id === id) return '<div class="r-row active">' + (sprite ? '<canvas data-unit="' + sprite + '" data-size="' + size + '"></canvas>' : icon(id, 'big-ico')) + '<div class="b-info"><b>' + name + ' → ' + j.to + '</b><div class="bar"><i style="width:' + Math.round((1 - (j.ends - now) / 1000 / j.total) * 100) + '%"></i></div><span class="muted">' + U.time((j.ends - now) / 1000) + ' left</span></div>' + speedBtns({ kind: 'research' }, Math.max(1, Math.ceil((j.ends - now) / 30000)), 'rush') + '</div>';
       return '<div class="r-row">' + (sprite ? '<canvas data-unit="' + sprite + '" data-size="' + size + '"></canvas>' : icon(id, 'big-ico')) + '<div class="b-info"><b>' + name + '</b><span class="muted">Level ' + lvl + ' / ' + CH.RESEARCH.maxLevel(Math.max(1, ll)) + (extra ? ' · ' + extra : '') + '</span></div>' +
         (why === 'Maximum level' ? '<span class="maxed">Max</span>' : '<button class="btn' + (why ? '' : ' btn-gold') + '" data-act="research" data-kind="' + kind + '" data-id="' + id + '"' + (why ? ' disabled title="' + why + '"' : '') + '>' + (why && why !== 'Not enough resources' ? why : UI.cost(c, s) + ' · ' + U.time(CH.RESEARCH.time(lvl + 1))) + '</button>') + '</div>';
     };
@@ -477,6 +500,7 @@ CH.Screens = (function () {
         '<h4 class="group">Spells</h4>' + CH.SPELL_ORDER.map(sp => row('spell', sp, CH.SPELLS[sp].name, null, 0, s.research.spells[sp], CH.SPELLS[sp].desc)).join(''),
       on: {
         research: b => { const r = S.research(s, b.dataset.kind, b.dataset.id); if (!r.ok) return fail(r); CH.Audio.play('magic'); persist(); UI.refreshSheet(); },
+        ...speedActs,
         rush: () => { const c = Math.max(1, Math.ceil((s.rjob.ends - Date.now()) / 30000)); if (s.res.gems < c) return fail({ reason: 'Not enough gems' }); s.res.gems -= c; s.rjob.ends = Date.now(); CH.App.handleEvents(S.tick(s)); persist(); UI.refreshSheet(); },
         ...jobActions,
       },

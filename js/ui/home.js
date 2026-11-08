@@ -22,6 +22,8 @@ CH.Home = (function () {
       '<button class="icon-btn" id="hud-settings" aria-label="Settings">' + UI.icon('gear') + '</button>';
     $('alert').onclick = () => { CH.Audio.play('click'); CH.WorldUI.incomingModal(); };
     $('warbar').onclick = () => { CH.Audio.play('click'); const w = CH.App.save.world, th = w.throne, war = th.war && !th.war.ended && Date.now() < th.war.end;
+      const openRealm = CH.REALM_ORDER.find(id => CH.Realm.window(id, Date.now()).active);
+      if (!war && openRealm) { UI.sheet('realms', openRealm); return; }
       if (!war && w.inv) { const sh = w.inv.ships[0]; CH.WorldUI.open(sh); CH.WorldUI.select({ type: 'ship', o: sh }); return; }
       CH.WorldUI.open(th); CH.WorldUI.select({ type: 'throne', o: th }); };
     $('hud').onclick = e => {
@@ -64,7 +66,7 @@ CH.Home = (function () {
   function moreMenu() {
     const s = CH.App.save;
     UI.modal('<h3>Kingdom</h3><div class="more-grid">' +
-      [['daily', 'time', 'Daily' + (CH.Meta.claimable(s) ? ' ●' : '')], ['season', 'crown', 'Season Pass'], ['arena', 'swords', 'Arena'], ['forge', 'hammer', 'Forge'], ['achievements', 'crown', 'Achievements'],
+      [['daily', 'time', 'Daily' + (CH.Meta.claimable(s) ? ' ●' : '')], ['realms', 'map', 'Realms' + (CH.REALM_ORDER.some(id => CH.Realm.window(id, Date.now()).active) ? ' ●' : '')], ['season', 'crown', 'Season Pass'], ['arena', 'swords', 'Arena'], ['forge', 'hammer', 'Forge'], ['achievements', 'crown', 'Achievements'],
         ['redeem', 'gems', 'Redeem code'], ['store', 'gems', 'Gem Shop'], ['ranks', 'crown', 'Ranks'], ['skins', 'shield', 'Skins'], ['mail', 'map', 'Reports'], ['bag', 'crown', 'Bag'], ['infirmary', 'heal', 'Infirmary'], ['factions', 'shield', 'Factions'], ['events', 'crown', 'Events'], ['trade', 'gold', 'Trading Post'],
         ['buildings', 'hammer', 'Buildings'], ['lab', 'flask', 'Academy'], ['resources', 'stone', 'Resources'], ['profile', 'crown', 'Profile'], ['settings', 'gear', 'Settings'], ['howto', 'map', 'How to play']]
         .map(([k, i, n]) => '<button class="more-btn" data-more="' + k + '">' + UI.icon(i) + '<span>' + n + '</span></button>').join('') + '</div>',
@@ -119,7 +121,7 @@ CH.Home = (function () {
   }
   // Tasks start expanded on wide screens and collapsed (first task only) on phones.
   const tasksOpen = () => (st.tasksOpen === undefined ? window.innerWidth > 760 : st.tasksOpen);
-  const canCollect = () => save().buildings.some(b => B[b.type].cat === 'econ' && b.buf >= 10);
+  const canCollect = () => save().buildings.some(b => S.canCollectB(save(), b) && b.buf >= 10);
 
   /* ---------------- Selection & panel ---------------- */
   function buildingAt(x, y) {
@@ -169,7 +171,7 @@ CH.Home = (function () {
       if (d.cat === 'econ' && b.level) status = (status ? status + ' · ' : '') + U.fmt(b.buf) + ' / ' + U.fmt(d.buf(b.level)) + ' ready';
       if (b.job) actions.push('<button class="btn btn-gem" data-p="speed"' + (s.res.gems >= S.speedUpCost(b) ? '' : ' disabled') + '>Finish now ' + UI.icon('gems') + S.speedUpCost(b) + '</button>');
       if (b.job) for (const it of ['speed5m', 'speed1h']) if (s.items[it] > 0) actions.push('<button class="btn" data-p="item" data-item="' + it + '">' + CH.ITEMS[it].name.replace('Speed-up ', '−') + ' (' + s.items[it] + ')</button>');
-      if (d.cat === 'econ' && b.level) actions.push('<button class="btn" data-p="collect"' + (b.buf >= 1 ? '' : ' disabled') + '>Collect</button>');
+      if (d.cat === 'econ' && b.level) actions.push(s.res[d.res] >= S.capacity(s, d.res) ? '<span class="muted">' + d.res + ' is full (' + U.fmt(s.res[d.res]) + ' / ' + U.fmt(S.capacity(s, d.res)) + '): spend some or build storage to collect</span>' : '<button class="btn" data-p="collect"' + (b.buf >= 1 ? '' : ' disabled') + '>Collect</button>');
       if (!b.job && d.maxLevel > 1) {
         const why = S.upgradeBlocker(s, b);
         const maxed = b.level >= Math.min(d.maxLevel, b.type === 'castle' ? 8 : 99);
@@ -247,7 +249,7 @@ CH.Home = (function () {
   function collectOne(b) {
     const d = B[b.type], amt = S.collect(save(), b.id);
     if (amt > 0) { floater((b.tx + 1) * T, b.ty * T, '+' + U.fmt(amt), d.res === 'gold' ? '#ffe07a' : d.res === 'wood' ? '#e8b878' : '#e0ddd6'); CH.Audio.play('collect'); persist(); refreshHud(); }
-    else if (b.buf >= 1) { UI.toast('Your ' + (d.res === 'gold' ? 'gold vaults are' : d.res === 'wood' ? 'timber yards are' : 'stone depots are') + ' full. Build or upgrade storage.', 'warn'); CH.Audio.play('error'); }
+    else if (b.buf >= 1) { UI.toast('Your ' + d.res + ' storage is full. Nothing was lost: spend some or build more storage.', 'warn'); CH.Audio.play('error'); }
   }
   function collectAll() {
     const s = save(), before = s.buildings.filter(b => B[b.type].cat === 'econ').map(b => ({ b, buf: b.buf }));
@@ -329,7 +331,7 @@ CH.Home = (function () {
       }
       const b = buildingAt(p.x, p.y);
       if (!b) return deselect();
-      if (B[b.type].cat === 'econ' && b.level && b.buf >= Math.max(10, B[b.type].buf(b.level) * 0.08) && st.selected !== b) { collectOne(b); select(b); return; }
+      if (S.canCollectB(save(), b) && b.buf >= Math.max(10, B[b.type].buf(b.level) * 0.08) && st.selected !== b) { collectOne(b); select(b); return; }
       CH.Audio.play('click');
       select(b);
     },

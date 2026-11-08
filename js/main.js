@@ -17,7 +17,7 @@ CH.App = (function () {
       else if (e.kind === 'healed') UI.toast(U.fmt(e.n) + ' troops recovered in the infirmary', 'good');
       else if (e.kind === 'starving') UI.toast('Your granaries are empty! ' + U.fmt(e.lost) + ' troops deserted. Build farms or train fewer troops.', 'bad');
       if (e.kind === 'built') { UI.toast(CH.BUILDINGS[e.type].name + (e.level > 1 ? ' upgraded to level ' + e.level : ' finished'), 'good'); CH.Audio.play('upgrade'); }
-      else if (e.kind === 'research') UI.toast((e.rkind === 'troop' ? CH.TROOPS[e.id].name : CH.SPELLS[e.id].name) + ' research reached level ' + e.level, 'good');
+      else if (e.kind === 'research') UI.toast((e.rkind === 'troop' ? CH.TROOPS[e.id].name : e.rkind === 'tech' ? CH.TECHS[e.id].name : CH.SPELLS[e.id].name) + ' research reached level ' + e.level, 'good');
       else if (e.kind === 'cleared') UI.toast('Cleared! ' + Object.entries(e.got).filter(([k]) => k !== 'levels').map(([k, v]) => '+' + v + ' ' + k).join(', ') + (e.gems ? ' and found ' + e.gems + ' gems!' : ''), 'good');
       if (e.levels) for (const l of e.levels) levelUp(l);
     }

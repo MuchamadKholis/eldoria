@@ -88,6 +88,49 @@ CH.Throne = (function () {
   }
   const keyName = (s, key) => key === 'player' ? s.player.name : key === 'guard' ? 'Citadel Guardians' : key === 'none' ? 'Nobody (empty)' : (W(s).kingdoms.find(k => k.id === key) || { name: '?' }).name;
   const keyFaction = (s, key) => key === 'player' ? s.faction : (key === 'guard' || key === 'none') ? null : (W(s).kingdoms.find(k => k.id === key) || {}).f;
+  /* ---------------- Royal titles & buffs ---------------- */
+  const BUFF_NAMES = { atk: 'troop attack', march: 'march speed', def: 'troop defense & health', train: 'training speed', prod: 'production', research: 'research speed' };
+  const fmtBuffs = b => Object.entries(b).map(([k, v]) => (v > 0 ? '+' : '') + Math.round(v * 100) + '% ' + BUFF_NAMES[k]).join(', ');
+  function titleOfKey(s, key) { const th = W(s) && W(s).throne; if (!th || !th.titles) return null; for (const id in th.titles) if (th.titles[id] === key) return id; return null; }
+  /** Combined buffs for a kingdom key ('player' or AI id): king + royal title + realm rule. */
+  function buffs(s, key = 'player') {
+    const th = W(s) && W(s).throne, out = { atk: 0, march: 0, def: 0, train: 0, prod: 0, research: 0 };
+    if (!th) return out;
+    const add = b => { for (const k in b) out[k] += b[k]; };
+    if (th.king && th.king.key === key && th.king.until > Date.now()) add(TH.kingBuffs);
+    const t = titleOfKey(s, key); if (t) add(TH.titles[t].buffs);
+    if (CH.Realm) add(CH.Realm.rulerBuffs(s, key));
+    return out;
+  }
+  /** King grants (or revokes, with key null) a title. One holder per title; one title per kingdom. */
+  function grantTitle(s, titleId, key, now = Date.now()) {
+    const th = W(s).throne;
+    if (!isPlayerKing(s)) return { ok: false, reason: 'Only the king can grant titles' };
+    if (!TH.titles[titleId]) return { ok: false, reason: 'Unknown title' };
+    th.titles = th.titles || {};
+    if (!key) { delete th.titles[titleId]; return { ok: true }; }
+    if (key === 'player') return { ok: false, reason: 'The king already enjoys every royal buff' };
+    for (const id in th.titles) if (th.titles[id] === key) delete th.titles[id];
+    th.titles[titleId] = key;
+    const k = W(s).kingdoms.find(x => x.id === key), T = TH.titles[titleId];
+    if (k) { if (T.good) { k.grudge = 0; k.friendUntil = Math.max(k.friendUntil || 0, th.king.until); } else k.grudge = Math.min(5, (k.grudge || 0) + 2); }
+    W(s).news.unshift({ t: now, text: (T.good ? '🎖 ' : '🤡 ') + TH.title + ' ' + s.player.name + ' named ' + keyName(s, key) + ' the ' + T.name + '.', kind: 'event' });
+    return { ok: true };
+  }
+  /** An AI king hands out titles: honours to its faction, villain titles to those it hates. */
+  function aiKingTitles(s, T) {
+    const w = W(s), th = w.throne, kingK = w.kingdoms.find(k => k.id === th.king.key);
+    th.titles = {};
+    const friends = w.kingdoms.filter(k => k.f === th.king.f && k.id !== th.king.key).sort((a, b) => CH.World.power(b) - CH.World.power(a));
+    const goods = Object.keys(TH.titles).filter(t => TH.titles[t].good), bads = Object.keys(TH.titles).filter(t => !TH.titles[t].good);
+    if (s.faction === th.king.f) goods.splice(0, 1).forEach(t => { th.titles[t] = 'player'; });
+    goods.forEach((t, i) => { if (friends[i]) th.titles[t] = friends[i].id; });
+    const foes = w.kingdoms.filter(k => k.f !== th.king.f).sort((a, b) => CH.World.power(b) - CH.World.power(a));
+    const hatesYou = kingK && (kingK.grudge > 0 || kingK.nemesis) && s.faction !== th.king.f;
+    bads.forEach((t, i) => { if (i === 0 && hatesYou) th.titles[t] = 'player'; else if (foes[i]) th.titles[t] = foes[i].id; });
+    const mine = titleOfKey(s, 'player');
+    if (mine) { const Tt = TH.titles[mine]; CH.World.addReport(s, { t: T, kind: 'event', outcome: Tt.good ? 'win' : 'loss', title: (Tt.good ? '🎖 The king named you ' : '🤡 The king branded you ') + Tt.name + ' (' + fmtBuffs(Tt.buffs) + ')' }); }
+  }
   const kingName = s => { const t = W(s) && W(s).throne; return t && t.king ? keyName(s, t.king.key) : null; };
   const isPlayerKing = s => { const t = W(s) && W(s).throne; return !!(t && t.king && t.king.key === 'player' && t.king.until > Date.now()); };
 
@@ -153,12 +196,12 @@ CH.Throne = (function () {
     if (ranking.length) {
       const [key, ms] = ranking[0];
       th.king = { key, name: war.names[key] || keyName(s, key), f: keyFaction(s, key), since: T, until: warWindow(T).next, held: ms };
-      th.prizes = freshPrizes();
+      th.prizes = freshPrizes(); th.titles = {};
       th.history.unshift({ t: T, key, name: th.king.name, held: ms });
       if (key === 'player') CH.Meta.track(s, 'crowned', 1, T); th.history.length = Math.min(th.history.length, 10);
       w.news.unshift({ t: T, text: '👑 ' + th.king.name + ' held the ' + TH.name + ' for ' + U.time(ms / 1000) + ' and is crowned ' + TH.title + '!', kind: 'event' });
       th.burn = 0; th.smoke = T + 10 * MIN;
-      if (key !== 'player') aiKingGifts(s, T);
+      if (key !== 'player') { aiKingGifts(s, T); aiKingTitles(s, T); }
       CH.World.addReport(s, { t: T, kind: 'event', title: key === 'player' ? '👑 You are the ' + TH.title + '! Hand out the Citadel\'s treasure.' : '👑 ' + th.king.name + ' is the new ' + TH.title, outcome: key === 'player' ? 'win' : 'loss', coords: [th.x, th.y] });
       ev.push({ kind: 'report', report: s.reports[0], alert: key === 'player' });
     } else {
@@ -345,5 +388,5 @@ CH.Throne = (function () {
     return { power, kills, factions };
   }
 
-  return { kingName, withdraw, garrisonOf, reviveLater, REVIVE_MS, warLabel, warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
+  return { buffs, fmtBuffs, titleOfKey, grantTitle, BUFF_NAMES, kingName, withdraw, garrisonOf, reviveLater, REVIVE_MS, warLabel, warWindow, ensure, update, arrive, aiDecide, distribute, isPlayerKing, rallyAllies, leaderboards, layout, keyName, guardians, endWar };
 })();

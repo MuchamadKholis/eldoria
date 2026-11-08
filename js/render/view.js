@@ -207,7 +207,7 @@ CH.View = (function () {
   function drawHome(view, save, ui, time) {
     const c = view.begin(0, 'forest');
     const cl = CH.State.castleLevel(save), area = CH.State.area(save);
-    c.drawImage(terrain('home' + cl, { area, seed: 11 + cl }), 0, 0);
+    c.drawImage(terrain('homeFixed', { area, seed: 19 }), 0, 0);
     const list = save.buildings.slice().sort((a, b) => (a.ty + CH.BUILDINGS[a.type].size) - (b.ty + CH.BUILDINGS[b.type].size) || a.tx - b.tx);
     const links = wallLinks(save.buildings, b => b.level > 0 && !(ui.moving && ui.moving.id === b.id));
     const now = Date.now();
@@ -231,7 +231,7 @@ CH.View = (function () {
         hpBar(c, cx - 22, b.ty * T - 12, 44, f, '#7fd36a');
         c.font = '700 10px system-ui, sans-serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.7)';
         const txt = CH.util.time((b.job.ends - now) / 1000); c.strokeText(txt, cx, b.ty * T - 16); c.fillStyle = '#fff'; c.fillText(txt, cx, b.ty * T - 16);
-      } else if (d.cat === 'econ' && b.level > 0 && b.buf >= Math.max(10, d.buf(b.level) * 0.08)) {
+      } else if (d.cat === 'econ' && b.level > 0 && b.buf >= Math.max(10, d.buf(b.level) * 0.08) && CH.State.canCollectB(save, b)) {
         const y = b.ty * T - 10 + Math.sin(time * 3 + b.id) * 2;
         A.circle(c, cx, y, 10, 'rgba(20,24,40,0.85)'); A.circle(c, cx, y, 8.5, d.res === 'gold' ? '#f2c94a' : d.res === 'wood' ? '#b8803e' : '#bdb8ae');
         if (b.buf >= d.buf(b.level) * 0.999) { c.beginPath(); c.arc(cx, y, 11, 0, Math.PI * 2); c.strokeStyle = '#ffdf6a'; c.lineWidth = 2; c.stroke(); }
@@ -261,10 +261,10 @@ CH.View = (function () {
       const st = b.stage, reg = st.region;
       return terrain('camp' + st.id, { pal: reg.pal, roads: b.roads.map(r => r.pts), decor: reg.decor, seed: 300 + st.gi, blockedDecor: b.decor, keepOut: (tx, ty) => b.road[ty * C.COLS + tx] || b.nearRoad(tx, ty, 1) || b.occ[ty * C.COLS + tx] || tx > 18 });
     }
-    if (b.mode === 'siege' && b.homeTerrain) { const cl = Math.min(8, b.opponent.cl); const [w, h] = C.AREA[cl - 1]; return terrain('home' + cl, { area: { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h }, seed: 11 + cl }); }
+    if (b.mode === 'siege' && b.homeTerrain) return terrain('homeFixed', { area: { ...C.HOME_AREA }, seed: 19 });
     if (b.mode === 'raid' || b.mode === 'siege') { const cl = Math.min(8, b.opponent.cl); return terrain('raid' + cl, { area: (() => { const [w, h] = C.AREA[cl - 1]; return { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h }; })(), seed: 50 + cl }); }
     const cl = CH.State.castleLevel(b.save);
-    return terrain('home' + cl, { area: CH.State.area(b.save), seed: 11 + cl });
+    return terrain('homeFixed', { area: CH.State.area(b.save), seed: 19 });
   }
 
   function drawBattle(view, b, ui, time) {
@@ -322,6 +322,7 @@ CH.View = (function () {
       switch (p.kind) {
         case 'arrow': { const a = p.a || 0; A.line(c, p.x - Math.cos(a) * 11, p.y - Math.sin(a) * 11, p.x, p.y, '#d9b16a', 1.6); A.line(c, p.x - Math.cos(a) * 2, p.y - Math.sin(a) * 2, p.x + Math.cos(a) * 2, p.y + Math.sin(a) * 2, '#eee', 2.2); break; }
         case 'laser': { const a = p.a || Math.atan2(p.vy || 0, p.vx || 1); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#5fffa0', 3); A.line(c, p.x - Math.cos(a) * 14, p.y - Math.sin(a) * 14, p.x, p.y, '#eafff2', 1); break; }
+        case 'holy': A.circle(c, p.x, p.y, 5, 'rgba(255,240,170,0.5)'); A.circle(c, p.x, p.y, 2.6, '#fffbe0'); break;
         case 'rock': A.circle(c, p.x, p.y, 5, '#8a7e6a'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.8, '#b8ae9a'); break;
         case 'ball': A.circle(c, p.x, p.y, 4.5, '#1c1b20'); A.circle(c, p.x - 1.5, p.y - 1.5, 1.5, 'rgba(255,255,255,0.4)'); break;
         case 'orb': A.glow(c, p.x, p.y, 12, '190,150,255', 0.8); A.circle(c, p.x, p.y, 3, '#fff'); break;

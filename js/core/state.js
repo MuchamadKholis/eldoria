@@ -37,7 +37,8 @@ CH.State = (function () {
   const castle = s => s.buildings.find(b => b.type === 'castle');
   const castleLevel = s => Math.max(1, (castle(s) || { level: 1 }).level);
   function area(s, cl) {
-    const [w, h] = C.AREA[(cl || castleLevel(s)) - 1];
+    if (!cl) return { ...C.HOME_AREA }; // your kingdom: one big fixed area from the start
+    const [w, h] = C.AREA[cl - 1];
     return { x: Math.floor((C.COLS - w) / 2), y: Math.floor((C.ROWS - h) / 2), w, h };
   }
   const byId = (s, id) => s.buildings.find(b => b.id === id);
@@ -58,7 +59,7 @@ CH.State = (function () {
     let m = 1 + 0.05 * ((s.research.techs || {}).prosperity || 0);
     if (s.faction != null && CH.FACTIONS && CH.FACTIONS[s.faction].bonus.prod) m += CH.FACTIONS[s.faction].bonus.prod;
     if (CH.World && s.world) m += CH.World.territoryBonus(s);
-    if (CH.Throne && s.world && CH.Throne.isPlayerKing(s)) m += CH.THRONE.kingBonus.prod;
+    if (CH.Throne && s.world) m += CH.Throne.buffs(s).prod;
     return m;
   }
   function productionPerMin(s, r) {
@@ -225,12 +226,14 @@ CH.State = (function () {
     const b = byId(s, id);
     if (!b || B[b.type].cat !== 'econ') return 0;
     const r = B[b.type].res;
-    const room = capacity(s, r) - s.res[r];
-    const amt = Math.floor(Math.min(b.buf, room));
+    const room = Math.max(0, capacity(s, r) - s.res[r]); // above the limit (gifts, loot): nothing to collect, nothing lost
+    const amt = Math.floor(Math.max(0, Math.min(b.buf, room)));
     s.res[r] += amt; b.buf -= amt;
     if (CH.Meta && amt > 0) CH.Meta.track(s, 'collect', amt);
     return amt;
   }
+  /** Can this producer be collected right now? (No, if its resource is already at or above the limit.) */
+  const canCollectB = (s, b) => B[b.type].cat === 'econ' && b.level > 0 && b.buf >= 1 && s.res[B[b.type].res] < capacity(s, B[b.type].res);
   function collectAll(s) {
     const got = { gold: 0, wood: 0, stone: 0, food: 0 };
     for (const b of s.buildings) if (B[b.type].cat === 'econ') got[B[b.type].res] += collect(s, b.id);
@@ -241,7 +244,7 @@ CH.State = (function () {
   const barracksLevel = s => highestLevel(s, 'barracks');
   /** Each military building trains one batch at a time. */
   const batchCap = (s, bld) => (highestLevel(s, bld) ? B[bld].batch(highestLevel(s, bld)) : 0);
-  const trainTimeEach = (s, type) => CH.TROOPS[type].time * (1 - 0.04 * (highestLevel(s, CH.TROOPS[type].building) - 1));
+  const trainTimeEach = (s, type) => CH.TROOPS[type].time * (1 - 0.04 * (highestLevel(s, CH.TROOPS[type].building) - 1)) / Math.max(0.5, 1 + (CH.Throne && s.world ? CH.Throne.buffs(s).train : 0));
   function trainCost(type, n) { const c = CH.TROOPS[type].cost; return { gold: c.gold * n, wood: c.wood * n, stone: c.stone * n, food: c.food * n }; }
   function trainBlocker(s, type, n = 1) {
     const d = CH.TROOPS[type], lvl = highestLevel(s, d.building);
@@ -417,7 +420,7 @@ CH.State = (function () {
     if (why) return { ok: false, reason: why };
     const L = resLevel(s, kind, id) + 1;
     pay(s, researchCost(kind, id, L));
-    const tm = kind === 'tech' ? CH.RESEARCH.techTime(L) : CH.RESEARCH.time(L);
+    const tm = Math.round((kind === 'tech' ? CH.RESEARCH.techTime(L) : CH.RESEARCH.time(L)) / Math.max(0.5, 1 + (CH.Throne && s.world ? CH.Throne.buffs(s).research : 0)));
     s.rjob = { kind, id, to: L, ends: now + tm * 1000, total: tm };
     return { ok: true };
   }
@@ -688,7 +691,7 @@ CH.State = (function () {
     castle, castleLevel, area, byId, countOf, maxCount, maxLevelFor, highestLevel, buildingLevel, capacity, productionPerMin,
     builders, busy, freeBuilders, canAfford, pay, give, missing, xpFor, addXp,
     tilesFree, buildCost, buildBlocker, build, upgradeBlocker, upgrade, move, clearObstacle, speedUpCost, speedUp,
-    collect, collectAll, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
+    collect, collectAll, canCollectB, barracksLevel, housingUsed, trainBlocker, train, cancelTrain, armySize, batchCap, trainTimeEach, trainCost,
     beds, woundedCount, addCasualties, healCost, healTime, heal, useItem, applySpeed, gemFinishCost, gemFinish, shielded, beginner, power, marchSlots, trade,
     prodMult, upkeepPerHour, protectedAmount, resLevel, shopPrice, buy, baseMarchSlots, buyMarchSlot, ownsSkin, buySkin, equipSkin, heroSkin,
     labLevel, researchCost, researchBlocker, research, spellUnlocked, heroHallLevel, heroMaxLevel, heroBlocker, heroAction, heroMult,

@@ -53,12 +53,12 @@ CH.Siege = (function () {
       .concat(attacker.monsters ? squads(attacker.monsters, 30).map(q => ({ ...q, monster: true, mult: attacker.monsterMult || 1 })) : []);
     let defSq = [];
     // Defenders fight on home turf: +15%.
-    if (defender.army) defSq = squads(defender.army).map(q => ({ ...q, mult: troopMult(q.type, defender) * 1.15 }));
+    if (defender.army) defSq = squads(defender.army).map(q => ({ ...q, mult: troopMult(q.type, defender) * 1.15 * (1 + (defender.defBonus || 0)) }));
     if (defender.monsters) defSq = defSq.concat(squads(defender.monsters, 24).map(q => ({ ...q, monster: true, mult: defender.monsterMult || 1 })));
     return {
       mode: 'siege', seed, playerSide,
       names: { atk: attacker.name, def: defender.name },
-      cl: defender.cl || 1, homeTerrain: !!defender.homeTerrain, kind: defender.kind,
+      cl: defender.cl || 1, homeTerrain: !!defender.homeTerrain, kind: defender.kind, area: defender.homeTerrain ? { ...CH.CONFIG.HOME_AREA } : null,
       layout: defender.layout || [],
       fortMult: fortScale(defender.cl || 1) * (1 + (defender.fortBonus || 0)),
       objective: defender.kind === 'camp' ? 'eliminate' : 'castle',

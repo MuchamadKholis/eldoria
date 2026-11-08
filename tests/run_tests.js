@@ -36,6 +36,31 @@ test('troops eat food; when food runs out some desert (capped, never negative)',
   S.tick(s, T0 + 3600e3);
   ok(s.res.food === 0 && s.army.swordsman < 10000 && s.army.swordsman >= 7500, 'army ' + s.army.swordsman);
 });
+test('collecting never reduces resources that are above the storage limit', () => {
+  const s = fresh(), m = s.buildings.find(b => b.type === 'goldMine'); m.buf = 500;
+  s.res.gold = 15e6; ok(S.collect(s, m.id) === 0 && s.res.gold === 15e6 && m.buf === 500 && !S.canCollectB(s, m));
+  S.collectAll(s); ok(s.res.gold === 15e6, 'collect all lowered gold');
+  s.res.gold = 0; ok(S.collect(s, m.id) === 500 && s.res.gold === 500);
+});
+test('home area is fixed and large from the start', () => { const s = fresh(); const a = S.area(s); ok(a.w === 28 && a.h === 20); S.castle(s).level = 5; ok(S.area(s).w === 28); });
+test('troops never stand idle: with no buildings left they hunt enemies anywhere', () => {
+  const s = fresh();
+  const cfg = CH.Siege.build({ attacker: { name: 'A', army: { swordsman: 400 } }, defender: { name: 'D', kind: 'camp', cl: 3, layout: [], army: { archer: 100 } }, dir: { x: 1, y: 0 }, seed: 3 });
+  const r = CH.Siege.run(cfg); ok(r.outcome === 'win' && r.time < 60, 'outcome ' + r.outcome + ' in ' + r.time);
+});
+test('march speed-up: a boost halves the time left, gems arrive at once', () => {
+  const s = fresh(), k = nearest(s, s.world.kingdoms)[0];
+  const r = Wd.sendMarch(s, 'attack', { type: 'kingdom', id: k.id }, { archer: 10 }, null, 'surround', T0), m = r.march;
+  const left = m.t1 - T0; s.items.marchBoost = 1;
+  ok(Wd.speedMarch(s, m.id, 'item', T0).ok && Math.abs((m.t1 - T0) - left / 2) < 2 && !Wd.speedMarch(s, m.id, 'item', T0).ok);
+  s.res.gems = 1000; ok(Wd.speedMarch(s, m.id, 'gems', T0).ok && m.t1 === T0);
+});
+test('materials for gems and smelting gear into iron ore', () => {
+  const s = fresh(); CH.Meta.ensure(s); s.res.gems = 100; const i0 = s.mats.iron;
+  ok(CH.Meta.buyMat(s, 'iron').ok && s.mats.iron === i0 + 50 && s.res.gems === 85);
+  s.res.gold = 1e6; const it = CH.Meta.craft(s, 'armor', 0).item; const i1 = s.mats.iron;
+  ok(CH.Meta.smelt(s, it.id).ok && s.mats.iron === i1 + 3 && !s.gear.length);
+});
 test('batch training: one batch per building, capped size, costs food, finishes over time', () => {
   const s = fresh(); s.res.food = 1e5; s.res.gold = 1e5;
   ok(S.trainBlocker(s, 'swordsman', 1e6).startsWith('Max'));
@@ -321,7 +346,21 @@ test('player king hands out prizes: one of each kind for yourself, recipients be
   ok(CH.Throne.distribute(s, 'knight0', 'player', T0).ok && !CH.Throne.distribute(s, 'knight1', 'player', T0).ok);
   const k = s.world.kingdoms[0]; k.grudge = 3;
   ok(CH.Throne.distribute(s, 'knight1', k.id, T0).ok && k.grudge === 0 && k.friendUntil === T0 + 7 * 864e5);
-  ok(Math.abs(S.prodMult(s) - 1.1) < 1e-9 || CH.Throne.isPlayerKing(s) === false);
+  ok(Math.abs(S.prodMult(s) - 1.15) < 1e-9 || CH.Throne.isPlayerKing(s) === false);
+});
+test('royal titles: the king has every buff, grants honours and villain titles with real effects', () => {
+  const s = fresh(); const th = s.world.throne;
+  th.king = { key: 'player', name: 'Me', f: null, since: Date.now(), until: Date.now() + 7 * 864e5, held: 1 };
+  const b = CH.Throne.buffs(s); ok(b.atk > 0 && b.march > 0 && b.def > 0 && b.train > 0 && b.prod > 0 && b.research > 0);
+  const k = s.world.kingdoms[0], k2 = s.world.kingdoms[1];
+  const p0 = Wd.power(k2);
+  ok(CH.Throne.grantTitle(s, 'steward', k.id).ok && CH.Throne.titleOfKey(s, k.id) === 'steward' && k.friendUntil > Date.now());
+  Wd.tick(s, Date.now());
+  ok(CH.Throne.grantTitle(s, 'coward', k2.id).ok && Wd.power(k2) < p0, 'villain title should weaken');
+  ok(CH.Throne.grantTitle(s, 'marshal', k.id).ok && CH.Throne.titleOfKey(s, k.id) === 'marshal' && !th.titles.steward, 'one title per kingdom');
+  th.king.key = 'k999'; ok(!CH.Throne.grantTitle(s, 'fool', k.id).ok, 'only the king grants titles');
+  // A title on the player changes training and research time
+  th.titles = { armsmaster: 'player' }; const t1 = S.trainTimeEach(s, 'swordsman'); th.titles = { slacker: 'player' }; ok(S.trainTimeEach(s, 'swordsman') > t1);
 });
 test('march slots can be bought up to 5; skins are bought, equipped and saved', () => {
   const s = fresh(); s.res.gems = 1e5;
@@ -423,6 +462,32 @@ test('arena: troops never die, rounds advance, losses rest 5 minutes, rewards on
 test('the king shown on the Citadel follows your current name', () => {
   const s = fresh(); s.world.throne.king = { key: 'player', name: 'Old Name', f: null, since: T0, until: T0 + 1e9, held: 1 };
   s.player.name = 'New Name'; ok(CH.Throne.kingName(s) === 'New Name');
+});
+
+test('realm portals open three times a week; conquering a realm makes you its ruler with buffs', () => {
+  const TUE = new Date(2026, 10, 10, 20, 5).getTime(), s = fresh(TUE);
+  ok(CH.Realm.window('alien', TUE).active && !CH.Realm.window('hell', TUE).active && !CH.Realm.window('heaven', TUE).active);
+  ok(!CH.Realm.fight(s, 'hell', null, TUE).ok, 'hell portal must be closed on Tuesday');
+  s.army = { knight: 6000, longbowman: 5000, heavyCavalry: 4000, paladin: 1500, trebuchet: 300 }; s.heroes.aldric.level = 8;
+  let t = TUE, last = null;
+  for (let i = 0; i < 8; i++) { last = CH.Realm.fight(s, 'alien', 'aldric', t); t += 6 * MIN; S.tick(s, t); if (last.ok && last.stage >= 4) break; }
+  const ru = CH.Realm.ruler(s, 'alien', t);
+  ok(ru && ru.key === 'player' && ru.until === CH.Realm.window('alien', TUE).next, 'not ruler');
+  ok(CH.Throne.buffs(s).march > 0, 'no realm buff');
+  ok(s.reports.some(r => r.kind === 'realm' && r.revive && r.replay));
+});
+test('weak armies cannot conquer a realm; AI claims it when the portal closes', () => {
+  const TUE = new Date(2026, 10, 10, 20, 5).getTime(), s = fresh(TUE); s.army = { swordsman: 300 };
+  const r = CH.Realm.fight(s, 'alien', null, TUE); ok(r.ok && !r.won);
+  Wd.tick(s, TUE + 70 * MIN);
+  const ru = CH.Realm.ruler(s, 'alien', TUE + 70 * MIN); ok(ru && ru.key !== 'player');
+});
+test('Emperor of the Four Worlds: king of Eldoria + ruler of all three realms', () => {
+  const s = fresh(Date.now()), now = Date.now(); const rs = CH.Realm.ensure(s.world);
+  s.world.throne.king = { key: 'player', name: 'Me', f: null, since: now, until: now + 864e5, held: 1 };
+  for (const id of CH.REALM_ORDER) rs[id].ruler = { key: 'player', since: now, until: now + 864e5 };
+  const g = s.res.gems; CH.Realm.update(s, now, []);
+  ok(CH.Realm.isEmperor(s) && s.res.gems === g + 2000 && CH.Meta.checkAchievements(s).some(a => a.id === 'emperor'));
 });
 
 console.log('\nBattle engine (pathfinding)');
